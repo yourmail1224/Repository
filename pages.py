@@ -471,6 +471,7 @@ a{color:inherit;text-decoration:none}
 .sub-card-icon{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,var(--purple),#6D48D6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;flex-shrink:0;box-shadow:0 6px 16px rgba(139,92,246,.35)}
 .sub-card-titles{flex:1;min-width:0}
 .sub-card-name-v2{font-size:15.5px;font-weight:800;color:var(--t1);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub-card-badges-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px}
 .sub-card-desc-v2{font-size:11px;color:var(--t3);margin-top:3px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .sub-card-lock-badge{flex-shrink:0;width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px}
 .sub-card-lock-badge.locked{background:var(--amber-bg);color:var(--amber-t)}
@@ -587,6 +588,14 @@ a{color:inherit;text-decoration:none}
 
 /* ══════ کانفیگ‌ها - طراحی ردیفی حرفه‌ای ══════ */
 .cfg-grid{display:flex;flex-direction:column;gap:10px}
+.cfg-drawer{background:var(--card);border:1px solid var(--card-b);border-radius:14px;overflow:hidden}
+.cfg-drawer-head{display:flex;align-items:center;gap:9px;padding:13px 16px;cursor:pointer;user-select:none;transition:.15s}
+.cfg-drawer-head:hover{background:rgba(255,255,255,.03)}
+[data-theme="light"] .cfg-drawer-head:hover{background:rgba(0,0,0,.02)}
+.cfg-drawer-arrow{font-size:13px;color:var(--t3);transition:transform .2s}
+.cfg-drawer-title{font-size:13px;font-weight:800;color:var(--t1)}
+.cfg-drawer-count{margin-inline-start:auto;font-size:10.5px;color:var(--t3);background:var(--card-b);padding:3px 10px;border-radius:20px}
+.cfg-drawer-body{padding:0 10px 10px;display:flex;flex-direction:column;gap:10px}
 .cfg-card{background:var(--card);border:1px solid var(--card-b);border-radius:14px;padding:0;transition:all .2s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden}
 .cfg-card:hover{border-color:var(--card-bh);box-shadow:0 6px 24px rgba(0,0,0,.18)}
 .cfg-card.is-off{opacity:.6}
@@ -761,6 +770,10 @@ a{color:inherit;text-decoration:none}
         <label><i class="ti ti-calendar-due"></i> انقضای گروه (روز)</label>
         <input class="modal-v2-input" id="ns-exp" type="number" min="0" step="1" placeholder="۰ = بدون انقضا">
       </div>
+      <label class="cl" style="margin-top:-8px;margin-bottom:16px;cursor:pointer;align-items:center">
+        <input type="checkbox" id="ns-lazy-start" style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0">
+        <span>به‌جای الان، شمارش انقضا از <b>اولین اتصال واقعی</b> کاربر شروع بشه (تا اون‌موقع، خط انقضا فعال نمی‌شه)</span>
+      </label>
 
       <div class="cp-block mb16">
         <div class="cp-block-label"><i class="ti ti-plug-connected"></i> پروتکل‌ها (می‌تونی چندتا انتخاب کنی)</div>
@@ -868,6 +881,15 @@ a{color:inherit;text-decoration:none}
         <label><i class="ti ti-calendar-due"></i> انقضا (روز از الان، ۰ = بدون انقضا)</label>
         <input class="modal-v2-input" id="es-exp" type="number" min="0" step="1" placeholder="خالی = بدون تغییر">
       </div>
+      <label class="cl" style="cursor:pointer;align-items:center">
+        <input type="checkbox" id="es-lazy-start" style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0">
+        <span>انقضا از اولین اتصال واقعی کاربر شروع بشه (اگه هنوز فعال نشده باشه)</span>
+      </label>
+      <div class="cp-block mb16" style="margin-top:14px">
+        <div class="cp-block-label"><i class="ti ti-plug-connected"></i> کانفیگ‌های این گروه — پروتکل، آی‌پی تمیز و محدودیت هرکدوم</div>
+        <div id="es-links-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        <button class="btn btn-o" style="width:100%;justify-content:center;margin-top:10px" onclick="addEsLinkRow()"><i class="ti ti-plus"></i> افزودن کانفیگ به گروه</button>
+      </div>
       <div class="modal-v2-footer">
         <button class="btn btn-o" onclick="closeModal('modal-edit-sub')" style="flex:.6">انصراف</button>
         <button class="btn btn-pur" onclick="saveEditSub()"><i class="ti ti-device-floppy"></i> ذخیره تغییرات</button>
@@ -876,7 +898,7 @@ a{color:inherit;text-decoration:none}
   </div>
 </div>
 <div class="modal-bg" id="modal-sub-log">
-  <div class="modal-v2" style="max-width:600px">
+  <div class="modal-v2" style="max-width:760px">
     <div class="modal-v2-head">
       <button class="modal-v2-close" onclick="closeModal('modal-sub-log')"><i class="ti ti-x"></i></button>
       <div class="modal-v2-icon"><i class="ti ti-chart-histogram"></i></div>
@@ -889,7 +911,7 @@ a{color:inherit;text-decoration:none}
         <span class="chip active" data-range="week" onclick="setSublogRange('week',this)">هفته</span>
         <span class="chip" data-range="month" onclick="setSublogRange('month',this)">ماه</span>
       </div>
-      <div id="sublog-chart-box" style="min-height:180px;display:flex;align-items:center;justify-content:center">
+      <div id="sublog-chart-box" style="min-height:340px;display:flex;align-items:center;justify-content:center">
         <i class="ti ti-loader-2" style="animation:spin 1s linear infinite;font-size:22px;color:var(--t3)"></i>
       </div>
       <div style="display:flex;gap:10px;margin:14px 0">
@@ -922,6 +944,24 @@ a{color:inherit;text-decoration:none}
     </div>
     <div class="fg" style="margin-bottom:13px"><label>انقضا (روز از الان، 0 = بدون تغییر/نامحدود)</label><input class="fi" id="el-exp" type="number" min="0" step="1" style="width:100%"></div>
     <div class="fg" style="margin-bottom:13px"><label>یادداشت</label><input class="fi" id="el-note" style="width:100%"></div>
+    <div class="fg" style="margin-bottom:13px">
+      <label>پروتکل انتقال</label>
+      <select class="fs" id="el-protocol" style="width:100%">
+        <option value="vless-ws">VLESS / WebSocket</option>
+        <option value="xhttp-packet-up">XHTTP Ultra · packet-up</option>
+        <option value="xhttp-stream-up">XHTTP Ultra · stream-up</option>
+      </select>
+    </div>
+    <div class="fg" style="margin-bottom:13px">
+      <label>مسیر اتصال</label>
+      <div class="chip-row" id="el-route-chips">
+        <span class="chip" data-route="domain" onclick="setElRoute('domain',this)"><i class="ti ti-world" style="font-size:11px"></i> دامنه اصلی</span>
+        <span class="chip" data-route="proxy" onclick="setElRoute('proxy',this)"><i class="ti ti-route" style="font-size:11px"></i> پروکسی</span>
+        <span class="chip" data-route="clean_ip" onclick="setElRoute('clean_ip',this)"><i class="ti ti-server-2" style="font-size:11px"></i> آی‌پی تمیز</span>
+        <span class="chip" data-route="threexui" onclick="setElRoute('threexui',this)"><i class="ti ti-server-2" style="font-size:11px"></i> 3x-ui</span>
+      </div>
+      <select class="fs" id="el-cleanip" style="width:100%;margin-top:8px;display:none"></select>
+    </div>
     <div class="form-row" style="margin-bottom:13px">
       <div class="fg" style="flex:1"><label>Fingerprint (uTLS)</label>
         <select class="fs" id="el-fp" style="width:100%">
@@ -1204,7 +1244,7 @@ a{color:inherit;text-decoration:none}
         <div id="nl-cleanips-list" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
       <div class="cp-footer">
-        <div class="cp-footer-note"><i class="ti ti-info-circle"></i> UUID کاملاً رندوم تولید می‌شود · فقط UUID‌های ثبت‌شده اجازه اتصال دارند · پروتکل پس از ساخت قابل تغییر نیست.</div>
+        <div class="cp-footer-note"><i class="ti ti-info-circle"></i> UUID کاملاً رندوم تولید می‌شود · فقط UUID‌های ثبت‌شده اجازه اتصال دارند · پروتکل و آی‌پی تمیز بعداً هم از دکمه‌ی ویرایش کانفیگ قابل تغییرن.</div>
         <button class="cp-submit-btn" onclick="createLink()"><i class="ti ti-link-plus"></i> ساخت کانفیگ</button>
       </div>
     </div>
@@ -1612,7 +1652,7 @@ a{color:inherit;text-decoration:none}
 </section>
 </main>
 <script>
-let isDark=localStorage.getItem('panel-theme')!=='light';
+let isDark=localStorage.getItem('panel-theme')==='dark';
 function applyTheme(dark){
   document.documentElement.setAttribute('data-theme',dark?'dark':'light');
   const icon=dark?'ti-sun':'ti-moon',label=dark?'تم روشن':'تم تاریک';
@@ -1787,8 +1827,41 @@ async function loadLinks(){
     const grid=document.getElementById('links-grid'),empty=document.getElementById('links-empty');
     if(!links.length){grid.innerHTML='';empty.style.display='block';document.getElementById('lsummary').innerHTML='<div class="empty"><i class="ti ti-link-off"></i><p>کانفیگی وجود ندارد</p></div>';return}
     empty.style.display='none';
-    const subMap=Object.fromEntries(subs.map(s=>[s.sub_id,s.name]));
-    grid.innerHTML=links.map(l=>{
+
+    // گروه‌بندی: کانفیگ‌های هر گروه ساب تو یه کشوی جمع‌شدنی جدا (برای اینکه با زیاد شدن
+    // کانفیگ‌های ساخته‌شده از ویزارد گروه، صفحه شلوغ و کند نشه)؛ کانفیگ‌های بدون گروه مستقیم نشون داده می‌شن.
+    const bySub={};
+    const standalone=[];
+    links.forEach(l=>{
+      if(l.sub_id && subs.some(s=>s.sub_id===l.sub_id)){
+        (bySub[l.sub_id]=bySub[l.sub_id]||[]).push(l);
+      }else{
+        standalone.push(l);
+      }
+    });
+    let html='';
+    subs.forEach(s=>{
+      const items=bySub[s.sub_id];
+      if(!items||!items.length)return;
+      html+=`<div class="cfg-drawer">
+        <div class="cfg-drawer-head" onclick="toggleCfgDrawer(this)">
+          <i class="ti ti-chevron-left cfg-drawer-arrow"></i>
+          <i class="ti ti-folder" style="color:var(--accent)"></i>
+          <span class="cfg-drawer-title">${esc(s.name)}</span>
+          <span class="cfg-drawer-count">${toFa(items.length)} کانفیگ</span>
+        </div>
+        <div class="cfg-drawer-body" style="display:none">
+          ${items.map(linkCardHtml).join('')}
+        </div>
+      </div>`;
+    });
+    if(standalone.length)html+=standalone.map(linkCardHtml).join('');
+    grid.innerHTML=html;
+
+    document.getElementById('lsummary').innerHTML=links.slice(0,6).map(l=>`<div class="sr"><span class="sr-k" style="gap:5px"><i class="ti ${l.expired?'ti-calendar-x':l.active?'ti-circle-check':'ti-circle-x'}" style="color:${l.expired?'var(--amber)':l.active?'var(--green)':'var(--red)'}"></i>${esc(l.label)}</span><span class="sr-v" style="font-size:10px">${fmtB(l.used_bytes)} / ${l.limit_bytes===0?'∞':fmtB(l.limit_bytes)}</span></div>`).join('');
+  }catch(e){console.error(e)}
+}
+function linkCardHtml(l){
   const lim=l.limit_bytes===0?'∞':fmtB(l.limit_bytes);
   const pct=l.limit_bytes===0?0:Math.min(100,l.used_bytes/l.limit_bytes*100);
   const bc=pct>90?'var(--red)':pct>70?'var(--amber)':'var(--accent)';
@@ -1836,9 +1909,13 @@ async function loadLinks(){
       </div>
     </div>
   </div>`;
-}).join('');
-    document.getElementById('lsummary').innerHTML=links.slice(0,6).map(l=>`<div class="sr"><span class="sr-k" style="gap:5px"><i class="ti ${l.expired?'ti-calendar-x':l.active?'ti-circle-check':'ti-circle-x'}" style="color:${l.expired?'var(--amber)':l.active?'var(--green)':'var(--red)'}"></i>${esc(l.label)}</span><span class="sr-v" style="font-size:10px">${fmtB(l.used_bytes)} / ${l.limit_bytes===0?'∞':fmtB(l.limit_bytes)}</span></div>`).join('');
-  }catch(e){console.error(e)}
+}
+function toggleCfgDrawer(headEl){
+  const body=headEl.nextElementSibling;
+  const arrow=headEl.querySelector('.cfg-drawer-arrow');
+  const isOpen=body.style.display!=='none';
+  body.style.display=isOpen?'none':'block';
+  if(arrow)arrow.style.transform=isOpen?'rotate(0deg)':'rotate(-90deg)';
 }
 async function createLink(){
   const label=document.getElementById('nl-label').value.trim()||'کانفیگ جدید';
@@ -1871,7 +1948,7 @@ async function createLink(){
     loadLinks();
   }catch(e){toast('خطا در ساخت','err')}
 }
-function openEditLink(uuid){
+async function openEditLink(uuid){
   const l=allLinksList.find(x=>x.uuid===uuid);
   if(!l)return;
   document.getElementById('el-uuid').value=uuid;
@@ -1880,13 +1957,39 @@ function openEditLink(uuid){
   if(l.limit_bytes===0){document.getElementById('el-val').value='';document.getElementById('el-unit').value='GB';}
   else{document.getElementById('el-val').value=(l.limit_bytes/1024/1024).toFixed(0);document.getElementById('el-unit').value='MB';}
   document.getElementById('el-exp').value='';
+  document.getElementById('el-protocol').value=l.protocol||'vless-ws';
   document.getElementById('el-fp').value=l.fingerprint||'chrome';
   document.getElementById('el-alpn').value=l.alpn||'';
   document.getElementById('el-port').value=l.port||443;
   document.getElementById('el-iplimit').value=l.ip_limit||0;
   if(!l.speed_limit_bytes){document.getElementById('el-speed').value='0';document.getElementById('el-speed-unit').value='MBIT';}
   else{document.getElementById('el-speed').value=(l.speed_limit_bytes*8/1024/1024).toFixed(2);document.getElementById('el-speed-unit').value='MBIT';}
+  await populateElCleanIpSelect();
+  const route=l.route||'domain';
+  document.querySelectorAll('#el-route-chips .chip').forEach(c=>c.classList.toggle('active',c.dataset.route===route));
+  document.getElementById('el-cleanip').style.display=route==='clean_ip'?'block':'none';
+  if(route==='clean_ip')document.getElementById('el-cleanip').value=l.clean_ip||'';
+  document.getElementById('el-route-chips').dataset.route=route;
   openModal('modal-edit-link');
+}
+async function populateElCleanIpSelect(){
+  try{
+    if(!allCleanIps||!allCleanIps.length){
+      const r=await authF('/api/settings');
+      const d=await r.json();
+      allCleanIps=d.clean_ips||[];
+    }
+  }catch(e){}
+  const sel=document.getElementById('el-cleanip');
+  sel.innerHTML=allCleanIps.length
+    ? allCleanIps.map(x=>`<option value="${esc(x.ip)}">${esc(x.ip)}${x.label&&x.label!==x.ip?' ('+esc(x.label)+')':''}</option>`).join('')
+    : `<option value="">— هیچ آی‌پی تمیزی ثبت نشده —</option>`;
+}
+function setElRoute(route,el){
+  document.querySelectorAll('#el-route-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('el-route-chips').dataset.route=route;
+  document.getElementById('el-cleanip').style.display=route==='clean_ip'?'block':'none';
 }
 async function saveEditLink(){
   const uuid=document.getElementById('el-uuid').value;
@@ -1895,13 +1998,17 @@ async function saveEditLink(){
   const val=document.getElementById('el-val').value;
   const unit=document.getElementById('el-unit').value;
   const exp=document.getElementById('el-exp').value;
+  const protocol=document.getElementById('el-protocol').value||'vless-ws';
+  const route=document.getElementById('el-route-chips').dataset.route||'domain';
+  const clean_ip=route==='clean_ip'?(document.getElementById('el-cleanip').value||''):'';
+  if(route==='clean_ip'&&!clean_ip){toast('یک آی‌پی تمیز انتخاب کن','err');return;}
   const fingerprint=document.getElementById('el-fp').value||'chrome';
   const alpn=document.getElementById('el-alpn').value.trim();
   const port=Number(document.getElementById('el-port').value)||443;
   const ip_limit=Number(document.getElementById('el-iplimit').value)||0;
   const speed_limit_value=Number(document.getElementById('el-speed').value)||0;
   const speed_limit_unit=document.getElementById('el-speed-unit').value;
-  const body={label,note,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit};
+  const body={label,note,limit_value:val||0,limit_unit:unit,protocol,route,clean_ip,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit};
   if(exp&&Number(exp)>0)body.expires_days=Number(exp);
   try{
     const r=await authF('/api/links/'+uuid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -1944,11 +2051,12 @@ function renderSubsGrid(subs){
         <div class="sub-card-head-v2">
           <div class="sub-card-icon"><i class="ti ti-folder"></i></div>
           <div class="sub-card-titles">
-            <div class="sub-card-name-v2">${esc(s.name)}
-              <span class="conn-live-badge ${s.is_online?'is-live':''}" style="margin-inline-start:8px" title="${s.is_online?'همین الان کسی به این گروه متصل است':'در حال حاضر کسی متصل نیست'}">
+            <div class="sub-card-name-v2">${esc(s.name)}</div>
+            <div class="sub-card-badges-row">
+              <span class="conn-live-badge ${s.is_online?'is-live':''}" title="${s.is_online?'همین الان کسی به این گروه متصل است':'در حال حاضر کسی متصل نیست'}">
                 <span class="dot ${s.is_online?'dg pulse':'dr'}"></span>${s.is_online?'متصل':'آفلاین'}
               </span>
-              ${s.active===false?'<span class="conn-live-badge" style="margin-inline-start:6px;background:var(--card-b);color:var(--t3)"><i class="ti ti-player-pause" style="font-size:10px"></i> غیرفعال</span>':(s.is_expired?'<span class="conn-live-badge" style="margin-inline-start:6px;background:var(--amber-bg);color:var(--amber-t)"><i class="ti ti-calendar-x" style="font-size:10px"></i> منقضی</span>':'')}
+              ${s.active===false?'<span class="conn-live-badge" style="background:var(--card-b);color:var(--t3)"><i class="ti ti-player-pause" style="font-size:10px"></i> غیرفعال</span>':(s.is_expired?'<span class="conn-live-badge" style="background:var(--amber-bg);color:var(--amber-t)"><i class="ti ti-calendar-x" style="font-size:10px"></i> منقضی</span>':(s.pending_activation?'<span class="conn-live-badge" style="background:var(--accent-d);color:var(--accent)"><i class="ti ti-hourglass-empty" style="font-size:10px"></i> منتظر اولین اتصال</span>':''))}
             </div>
             ${s.desc?`<div class="sub-card-desc-v2">${esc(s.desc)}</div>`:'<div class="sub-card-desc-v2" style="opacity:.5">بدون توضیحات</div>'}
           </div>
@@ -2081,6 +2189,7 @@ function resetCreateSubForm(){
   document.getElementById('ns-iplimit').value='0';
   document.getElementById('ns-speed').value='0';
   document.getElementById('ns-speed-unit').value='MBIT';
+  document.getElementById('ns-lazy-start').checked=false;
   nsSelectedProtos.clear();
   document.getElementById('ns-proto-settings').innerHTML='';
   document.querySelectorAll('#ns-proto-cards .proto-card').forEach(c=>c.classList.remove('active'));
@@ -2094,6 +2203,8 @@ async function createSub(){
   const quota_value=parseFloat(document.getElementById('ns-quota-val').value)||0;
   const quota_unit=document.getElementById('ns-quota-unit').value;
   const expires_days=parseInt(document.getElementById('ns-exp').value)||0;
+  const lazy_start=document.getElementById('ns-lazy-start').checked;
+  if(lazy_start && expires_days<=0){toast('برای «شروع از اولین اتصال» باید عدد انقضا (روز) رو هم پر کنی','err');return;}
   if(nsSelectedProtos.size===0){toast('حداقل یک پروتکل انتخاب کن','err');return;}
   const fingerprint=document.getElementById('ns-fp').value;
   const port=parseInt(document.getElementById('ns-port').value)||443;
@@ -2119,7 +2230,7 @@ async function createSub(){
   if(invalidProto){toast('برای «'+invalidProto+'» یا مسیر پایه رو نگه دار یا حداقل یه آی‌پی تمیز تیک بزن','err');return;}
   const totalConfigs=links.reduce((n,l)=>n+(l.include_base?1:0)+(l.clean_ips?.length||0),0);
   try{
-    const r=await authF('/api/subs/bulk-create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,desc,password:pw,quota_value,quota_unit,expires_days,links})});
+    const r=await authF('/api/subs/bulk-create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,desc,password:pw,quota_value,quota_unit,expires_days,lazy_start,links})});
     const d=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(d.detail||'خطا در ساخت گروه');
     resetCreateSubForm();
@@ -2129,7 +2240,7 @@ async function createSub(){
   }catch(e){toast('✗ '+(e.message||'خطا در ساخت گروه'),'err')}
 }
 async function deleteSub(sub_id){
-  if(!confirm('حذف این گروه؟ کانفیگ‌ها حذف نمی‌شوند.'))return;
+  if(!confirm('این گروه و تمام کانفیگ‌های داخلش برای همیشه حذف بشن؟ این عمل قابل بازگشت نیست.'))return;
   try{const r=await authF('/api/subs/'+sub_id,{method:'DELETE'});if(!r.ok)throw new Error();toast('گروه حذف شد ✓','ok');loadSubs();loadLinks();}catch(e){toast('خطا','err')}
 }
 async function toggleSubActive(sub_id,makeActive){
@@ -2199,12 +2310,12 @@ function renderSublogChart(d){
     return;
   }
   const max=Math.max(...vols,1);
-  box.innerHTML=`<div style="display:flex;align-items:flex-end;gap:3px;width:100%;height:170px;padding:6px 2px 20px;overflow-x:auto">
+  box.innerHTML=`<div style="display:flex;align-items:flex-end;gap:5px;width:100%;height:340px;padding:6px 2px 24px;overflow-x:auto">
     ${labels.map((l,i)=>{
-      const h=Math.max(3,Math.round((vols[i]/max)*130));
-      return `<div style="flex:1;min-width:14px;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative" title="${esc(l)}: ${esc(volsFmt[i]||'')}">
-        <div style="width:100%;max-width:20px;height:${h}px;background:linear-gradient(180deg,var(--accent),#2952C8);border-radius:4px 4px 0 0"></div>
-        <div style="font-size:7.5px;color:var(--t3);white-space:nowrap;position:absolute;top:100%;margin-top:3px">${esc(l)}</div>
+      const h=Math.max(5,Math.round((vols[i]/max)*260));
+      return `<div style="flex:1;min-width:24px;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative" title="${esc(l)}: ${esc(volsFmt[i]||'')}">
+        <div style="width:100%;max-width:38px;height:${h}px;background:linear-gradient(180deg,var(--accent),#2952C8);border-radius:6px 6px 0 0"></div>
+        <div style="font-size:9px;color:var(--t3);white-space:nowrap;position:absolute;top:100%;margin-top:4px">${esc(l)}</div>
       </div>`;
     }).join('')}
   </div>`;
@@ -2241,10 +2352,67 @@ async function resetSubLog(){
   }catch(e){toast('خطا در پاک کردن لاگ','err')}
 }
 let esEditingSubId=null;
+let esGroupLinks=[],esGroupOriginalUuids=[];
+const ES_PROTO_OPTIONS=[['vless-ws','VLESS / WebSocket'],['xhttp-packet-up','XHTTP Ultra · packet-up'],['xhttp-stream-up','XHTTP Ultra · stream-up']];
+function esRouteChip(i,route,label,icon){
+  const active=(esGroupLinks[i].route||'domain')===route?'active':'';
+  return `<span class="chip ${active}" onclick="esSetRoute(${i},'${route}')"><i class="ti ${icon}" style="font-size:11px"></i> ${label}</span>`;
+}
+function esLinkRowHtml(i){
+  const it=esGroupLinks[i];
+  const cleanIpOptions=allCleanIps.length
+    ? allCleanIps.map(x=>`<option value="${esc(x.ip)}" ${it.clean_ip===x.ip?'selected':''}>${esc(x.ip)}${x.label&&x.label!==x.ip?' ('+esc(x.label)+')':''}</option>`).join('')
+    : `<option value="">— هیچ آی‌پی تمیزی ثبت نشده —</option>`;
+  return `<div class="cp-block" style="padding:12px">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input class="modal-v2-input" style="flex:1" placeholder="عنوان کانفیگ" value="${esc(it.label||'')}" oninput="esGroupLinks[${i}].label=this.value">
+      <button class="btn btn-sm btn-d btn-icon" onclick="removeEsLinkRow(${i})" title="حذف این کانفیگ از گروه"><i class="ti ti-trash"></i></button>
+    </div>
+    <select class="modal-v2-input fs" style="margin-bottom:8px" onchange="esGroupLinks[${i}].protocol=this.value">
+      ${ES_PROTO_OPTIONS.map(([v,l])=>`<option value="${v}" ${it.protocol===v?'selected':''}>${l}</option>`).join('')}
+    </select>
+    <div class="chip-row" style="margin-bottom:8px">
+      ${esRouteChip(i,'domain','دامنه اصلی','ti-world')}
+      ${esRouteChip(i,'proxy','پروکسی','ti-route')}
+      ${esRouteChip(i,'clean_ip','آی‌پی تمیز','ti-server-2')}
+      ${esRouteChip(i,'threexui','3x-ui','ti-server-2')}
+    </div>
+    <select class="modal-v2-input fs" style="display:${it.route==='clean_ip'?'block':'none'};margin-bottom:8px" onchange="esGroupLinks[${i}].clean_ip=this.value">
+      ${cleanIpOptions}
+    </select>
+    <div class="form-row">
+      <div class="fg" style="flex:1"><label style="font-size:10px">محدودیت آی‌پی</label><input class="fi" type="number" min="0" step="1" style="width:100%" value="${it.ip_limit||0}" oninput="esGroupLinks[${i}].ip_limit=Number(this.value)||0"></div>
+      <div class="fg" style="flex:1"><label style="font-size:10px">پورت</label><input class="fi" type="number" min="1" max="65535" style="width:100%" value="${it.port||443}" oninput="esGroupLinks[${i}].port=Number(this.value)||443"></div>
+    </div>
+  </div>`;
+}
+function esSetRoute(i,route){
+  esGroupLinks[i].route=route;
+  if(route==='clean_ip' && !esGroupLinks[i].clean_ip && allCleanIps.length)esGroupLinks[i].clean_ip=allCleanIps[0].ip;
+  renderEsLinksList();
+}
+function renderEsLinksList(){
+  const box=document.getElementById('es-links-list');
+  if(!box)return;
+  box.innerHTML=esGroupLinks.length
+    ? esGroupLinks.map((_,i)=>esLinkRowHtml(i)).join('')
+    : '<div style="color:var(--t3);font-size:11px;text-align:center;padding:10px">هنوز کانفیگی در این گروه نیست</div>';
+}
+function addEsLinkRow(){
+  esGroupLinks.push({uuid:null,label:'',protocol:'vless-ws',route:'domain',clean_ip:'',ip_limit:0,port:443,fingerprint:'chrome',alpn:''});
+  renderEsLinksList();
+}
+function removeEsLinkRow(i){
+  esGroupLinks.splice(i,1);
+  renderEsLinksList();
+}
 async function openEditSub(sub_id){
   try{
-    const r=await authF('/api/subs');
-    const {subs=[]}=await r.json();
+    const [subsR,linksR,setR]=await Promise.all([authF('/api/subs'),authF('/api/links'),authF('/api/settings')]);
+    const {subs=[]}=await subsR.json();
+    const {links=[]}=await linksR.json();
+    const setData=await setR.json().catch(()=>({clean_ips:[]}));
+    allCleanIps=setData.clean_ips||[];
     const s=subs.find(x=>x.sub_id===sub_id);
     if(!s){toast('گروه پیدا نشد','err');return;}
     esEditingSubId=sub_id;
@@ -2257,6 +2425,15 @@ async function openEditSub(sub_id){
     else if(qb>0){document.getElementById('es-quota-val').value=(qb/(1024*1024)).toFixed(0);document.getElementById('es-quota-unit').value='MB';}
     else{document.getElementById('es-quota-val').value='';document.getElementById('es-quota-unit').value='GB';}
     document.getElementById('es-exp').value=s.days_left!=null?s.days_left:'';
+    document.getElementById('es-lazy-start').checked=!!s.lazy_start;
+    const groupLinks=links.filter(l=>l.sub_id===sub_id);
+    esGroupLinks=groupLinks.map(l=>({
+      uuid:l.uuid,label:l.label||'',protocol:l.protocol||'vless-ws',route:l.route||'domain',
+      clean_ip:l.clean_ip||'',ip_limit:l.ip_limit||0,port:l.port||443,
+      fingerprint:l.fingerprint||'chrome',alpn:l.alpn||'',
+    }));
+    esGroupOriginalUuids=groupLinks.map(l=>l.uuid);
+    renderEsLinksList();
     openModal('modal-edit-sub');
   }catch(e){toast('خطا در بارگذاری گروه','err')}
 }
@@ -2268,15 +2445,37 @@ async function saveEditSub(){
   const quota_value=parseFloat(document.getElementById('es-quota-val').value)||0;
   const quota_unit=document.getElementById('es-quota-unit').value;
   const expires_days=document.getElementById('es-exp').value===''?undefined:(parseInt(document.getElementById('es-exp').value)||0);
-  const body={name,desc,quota_value,quota_unit};
+  const lazy_start=document.getElementById('es-lazy-start').checked;
+  const badRow=esGroupLinks.find(it=>it.route==='clean_ip' && !it.clean_ip);
+  if(badRow){toast('برای مسیر «آی‌پی تمیز» باید یک آی‌پی انتخاب بشه (یا اول از تنظیمات اضافه کن)','err');return;}
+  const body={name,desc,quota_value,quota_unit,lazy_start};
   if(pw)body.password=pw;
   if(expires_days!==undefined)body.expires_days=expires_days;
   try{
     const r=await authF('/api/subs/'+esEditingSubId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error();
+
+    const currentUuids=esGroupLinks.filter(it=>it.uuid).map(it=>it.uuid);
+    const removedUuids=esGroupOriginalUuids.filter(u=>!currentUuids.includes(u));
+    await Promise.all(removedUuids.map(u=>authF('/api/links/'+u,{method:'DELETE'})));
+
+    await Promise.all(esGroupLinks.map(it=>{
+      const clean_ip=it.route==='clean_ip'?it.clean_ip:'';
+      if(it.uuid){
+        return authF('/api/links/'+it.uuid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          label:it.label||name,protocol:it.protocol,route:it.route,clean_ip,ip_limit:it.ip_limit||0,port:it.port||443,
+        })});
+      }
+      return authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        label:it.label||name,sub_id:esEditingSubId,protocol:it.protocol,route:it.route,clean_ip,
+        ip_limit:it.ip_limit||0,port:it.port||443,fingerprint:it.fingerprint||'chrome',alpn:it.alpn||'',
+        limit_value:0,limit_unit:'GB',
+      })});
+    }));
+
     closeModal('modal-edit-sub');
     toast('گروه بروزرسانی شد ✓','ok');
-    loadSubs();
+    loadSubs();loadLinks();
   }catch(e){toast('خطا در ذخیره تغییرات','err')}
 }
 let lmodalLinks=[],lmodalInSub=new Set(),lmodalOriginalInSub=new Set();
@@ -2485,19 +2684,50 @@ async function loadSettingsPage(){
     renderCleanIpsList();
   }catch(e){toast('خطا در بارگذاری تنظیمات','err')}
 }
+let cleanIpEditingIp=null;
 function renderCleanIpsList(){
   const box=document.getElementById('settings-clean-ips-list');
   if(!box)return;
   if(!allCleanIps.length){box.innerHTML='<div style="color:var(--t3);font-size:11px;text-align:center;padding:10px">هنوز آی‌پی تمیزی اضافه نکردید</div>';return;}
-  box.innerHTML=allCleanIps.map(x=>`
+  box.innerHTML=allCleanIps.map(x=>{
+    if(cleanIpEditingIp===x.ip){
+      return `<div style="display:flex;flex-direction:column;gap:8px;background:var(--card-2,rgba(0,0,0,.15));border:1px solid var(--accent);border-radius:11px;padding:9px 12px">
+        <div style="display:flex;gap:8px">
+          <input class="modal-v2-input" id="cip-edit-ip-${esc(x.ip)}" value="${esc(x.ip)}" style="direction:ltr;text-align:left;font-family:ui-monospace,monospace;flex:1.4">
+          <input class="modal-v2-input" id="cip-edit-label-${esc(x.ip)}" value="${esc(x.label||'')}" placeholder="برچسب" style="flex:1">
+        </div>
+        <div class="cl" style="margin:0"><i class="ti ti-info-circle"></i><span>تغییر آدرس، تمام کانفیگ‌هایی که قبلاً با این آی‌پی ساخته شدن رو هم به‌روز می‌کنه؛ دیگه لازم نیست ساب جدید بسازی.</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-o" style="flex:1;justify-content:center" onclick="cleanIpEditingIp=null;renderCleanIpsList()">انصراف</button>
+          <button class="btn btn-sm btn-p" style="flex:1;justify-content:center" onclick="saveEditCleanIp('${esc(x.ip)}')"><i class="ti ti-device-floppy"></i> ذخیره</button>
+        </div>
+      </div>`;
+    }
+    return `
     <div style="display:flex;align-items:center;gap:9px;background:var(--card-2,rgba(0,0,0,.15));border:1px solid var(--card-b);border-radius:11px;padding:9px 12px">
       <i class="ti ti-server-2" style="color:var(--accent);flex-shrink:0"></i>
       <div style="flex:1;min-width:0">
         <div style="font-family:ui-monospace,monospace;font-size:11.5px;direction:ltr;text-align:left">${esc(x.ip)}</div>
         ${x.label&&x.label!==x.ip?`<div style="font-size:9.5px;color:var(--t3);margin-top:1px">${esc(x.label)}</div>`:''}
       </div>
+      <button class="btn btn-sm btn-o btn-icon" onclick="cleanIpEditingIp='${esc(x.ip)}';renderCleanIpsList()" title="ویرایش"><i class="ti ti-edit"></i></button>
       <button class="btn btn-sm btn-d btn-icon" onclick="deleteCleanIp('${esc(x.ip)}')" title="حذف"><i class="ti ti-trash"></i></button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+async function saveEditCleanIp(oldIp){
+  const ip=document.getElementById('cip-edit-ip-'+oldIp).value.trim();
+  const label=document.getElementById('cip-edit-label-'+oldIp).value.trim();
+  if(!ip){toast('آی‌پی را وارد کنید','err');return;}
+  try{
+    const r=await authF('/api/settings/clean-ips/'+encodeURIComponent(oldIp),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,label})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||'خطا در ویرایش');
+    allCleanIps=d.clean_ips||[];
+    cleanIpEditingIp=null;
+    renderCleanIpsList();
+    toast(d.updated_links?`آی‌پی ویرایش شد و ${d.updated_links} کانفیگ به‌روز شد ✓`:'آی‌پی ویرایش شد ✓','ok');
+  }catch(e){toast('✗ '+(e.message||'خطا در ویرایش آی‌پی'),'err')}
 }
 async function addCleanIp(){
   const ip=document.getElementById('settings-clean-ip-val').value.trim();
@@ -2805,16 +3035,19 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
 .sub-desc{{font-size:12.5px;color:var(--t2);line-height:1.8}}
 .sub-head-row{{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap}}
 .sub-head-text{{flex:1;min-width:150px}}
-.mini-circles-row{{display:flex;gap:16px;flex-shrink:0}}
-.ring-circle{{width:92px;height:92px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 1.2s ease}}
-.ring-inner{{width:74px;height:74px;border-radius:50%;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;box-shadow:inset 0 0 0 1px var(--card-b)}}
-.ring-inner i{{font-size:19px}}
-.ring-val{{font-size:12.5px;font-weight:800;color:var(--t1);line-height:1.2;max-width:64px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+.mini-circles-row{{display:flex;gap:22px;flex-shrink:0}}
+.ring-circle{{width:184px;height:184px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 1.2s ease}}
+.ring-inner{{width:148px;height:148px;border-radius:50%;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-shadow:inset 0 0 0 1px var(--card-b)}}
+.ring-inner i{{font-size:34px}}
+.ring-val{{font-size:20px;font-weight:800;color:var(--t1);line-height:1.2;max-width:128px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+@media (max-width:640px){{
+  .mini-circles-row{{width:100%;justify-content:center}}
+}}
 @media (max-width:460px){{
-  .ring-circle{{width:74px;height:74px}}
-  .ring-inner{{width:59px;height:59px}}
-  .ring-inner i{{font-size:15px}}
-  .ring-val{{font-size:10.5px;max-width:50px}}
+  .ring-circle{{width:120px;height:120px}}
+  .ring-inner{{width:96px;height:96px}}
+  .ring-inner i{{font-size:22px}}
+  .ring-val{{font-size:14px;max-width:82px}}
 }}
 .sub-meta-row{{font-size:10.5px;color:var(--t3);margin-bottom:14px;display:flex;align-items:center;gap:6px}}
 .sub-sub-box{{background:var(--accent-d);border:1px solid var(--card-b);border-radius:13px;padding:12px 14px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}}
@@ -2999,7 +3232,7 @@ html,body{{min-height:100%;background:var(--bg);font-family:var(--serif);color:v
 const UUID_KEY='{uuid_key}';
 let savedPw='';
 
-let isDark=localStorage.getItem('panel-pub-theme')!=='light';
+let isDark=localStorage.getItem('panel-pub-theme')==='dark';
 function applyTheme(dark){{
   document.documentElement.setAttribute('data-theme',dark?'dark':'light');
   document.getElementById('theme-icon').className='ti '+(dark?'ti-sun':'ti-moon');
@@ -3136,7 +3369,9 @@ function renderContent(d){{
           }}
           // زمان باقی‌مانده
           let timePct=100, timeColor='#10B981', timeText='∞';
-          if(d.expires_at){{
+          if(d.pending_activation){{
+            timePct=100; timeColor='#3B82F6'; timeText='شروع نشده';
+          }}else if(d.expires_at){{
             const now=Date.now(), exp=new Date(d.expires_at).getTime(), created=d.created_at?new Date(d.created_at).getTime():now;
             const total=Math.max(1,exp-created), left=Math.max(0,exp-now);
             timePct=Math.max(0,Math.min(100,(left/total)*100));

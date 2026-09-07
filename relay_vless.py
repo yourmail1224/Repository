@@ -213,6 +213,7 @@ async def websocket_tunnel(ws: WebSocket, uuid: str):
                 await writer.wait_closed()
             except Exception:
                 pass
+        conn_bytes = connections.get(conn_id, {}).get("bytes", 0)
         connections.pop(conn_id, None)
-        log_sub_disconnect(uuid, conn_id)
+        log_sub_disconnect(uuid, conn_id, conn_bytes)
         logger.info(f"🔌 WS closed [{conn_id}] total={len(connections)}")

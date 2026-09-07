@@ -196,43 +196,44 @@ async def require_auth(request: Request):
         raise HTTPException(status_code=401, detail="unauthorized")
     return token
 
-# ── Per-sub-group usage/online logger — رویدادمحور (فقط لحظه‌ی وصل/قطع)، نه دوره‌ای ────
-MAX_USAGE_LOG_ENTRIES = 2000   # سقف تعداد رویداد ذخیره‌شده برای هر گروه (تا حجم دیتا زیاد نشه)
-
 # ── Per-sub-group usage/online logger — رویدادمحور (فقط سشن‌های واقعی)، نه دوره‌ای ────
-MAX_USAGE_LOG_ENTRIES = 2000   # سقف تعداد رویداد ذخیره‌شده برای هر گروه (تا حجم دیتا زیاد نشه)
-MIN_LOG_SESSION_SECONDS = 300  # اتصالات کوتاه‌تر از این (پیش‌فرض ۵ دقیقه) اصلاً لاگ نمی‌شن
+MAX_USAGE_LOG_ENTRIES = 2000    # سقف تعداد رویداد ذخیره‌شده برای هر گروه (تا حجم دیتا زیاد نشه)
+MIN_LOG_SESSION_SECONDS = 300   # اتصالات کوتاه‌تر از این (پیش‌فرض ۵ دقیقه) اصلاً لاگ نمی‌شن
+COALESCE_GAP_SECONDS = 120      # اگه فاصله‌ی reconnect از این کمتر باشه، ادامه‌ی همون استفاده حساب می‌شه
 
 _conn_started_at: dict[str, float] = {}   # conn_id -> زمان شروع (epoch)
-_conn_bytes_start: dict[str, int] = {}    # conn_id -> used_bytes لینک لحظه‌ی وصل شدن
-
-def _append_sub_usage_event(sub_id: str, entry: dict):
-    sub = SUBS.get(sub_id)
-    if not sub:
-        return
-    log = sub.setdefault("usage_log", [])
-    log.append(entry)
-    if len(log) > MAX_USAGE_LOG_ENTRIES:
-        del log[: len(log) - MAX_USAGE_LOG_ENTRIES]
+_pending_session: dict[str, dict] = {}    # sub_id -> {start_ts, bytes, last_seen, log_entry}
 
 def log_sub_connect(uuid: str, conn_id: str):
     """موقع وصل شدن یه کانکشن جدید صدا زده می‌شه. چیزی فوری لاگ نمی‌شه — چون تا وقتی سشن تموم
-    نشه معلوم نیست کوتاه بوده یا نه؛ فقط زمان/حجم شروع رو تو حافظه نگه می‌داریم تا لحظه‌ی قطع شدن."""
+    نشه معلوم نیست کوتاه بوده یا نه؛ فقط زمان شروع رو تو حافظه نگه می‌داریم تا لحظه‌ی قطع شدن.
+    اگه گروهِ این کانفیگ حالت «شروع شمارش از اولین اتصال» (lazy_start) داشته باشه و هنوز فعال
+    نشده باشه، همین اولین اتصال واقعی، انقضاش رو فعال می‌کنه (expires_at = الان + duration_days)."""
     link = LINKS.get(uuid)
     if not link:
         return
     _conn_started_at[conn_id] = time.time()
-    _conn_bytes_start[conn_id] = link.get("used_bytes", 0)
+    sub_id = link.get("sub_id")
+    if sub_id:
+        sub = SUBS.get(sub_id)
+        if sub and sub.get("lazy_start") and not sub.get("activated_at") and sub.get("duration_days", 0) > 0:
+            now = datetime.now()
+            sub["activated_at"] = now.isoformat()
+            sub["expires_at"] = (now + timedelta(days=sub["duration_days"])).isoformat()
+            log_activity("sub", f"گروه «{sub.get('name','?')}» با اولین اتصال فعال شد (انقضا: {sub['duration_days']} روز دیگه)", "ok")
+            asyncio.create_task(save_state())
 
-def log_sub_disconnect(uuid: str, conn_id: str):
-    """موقع قطع شدن همون کانکشن صدا زده می‌شه. اگه مدت وصل بودن کمتر از MIN_LOG_SESSION_SECONDS
-    باشه (اتصال کوتاه/گذرا)، اصلاً لاگ نمی‌شه؛ فقط سشن‌های واقعی و طولانی ثبت می‌شن."""
+def log_sub_disconnect(uuid: str, conn_id: str, bytes_transferred: int = 0):
+    """موقع قطع شدن همون کانکشن صدا زده می‌شه.
+    - bytes_transferred باید شمارنده‌ی دقیق خودِ همین کانکشن باشه (connections[conn_id]['bytes'])،
+      نه دلتای شمارنده‌ی تجمعی لینک — چون وقتی چند کانکشن هم‌زمان (چند دستگاه) از یک کانفیگ استفاده
+      می‌کنن، دلتای تجمعی بین اونا قاطی می‌شه و عدد غلط می‌ده.
+    - اگه یه کانکشن جدید ظرف COALESCE_GAP_SECONDS بعد از قطع‌شدنِ قبلی (روی همین گروه) وصل بشه،
+      reconnect در نظر گرفته می‌شه و به همون رکورد لاگ قبلی اضافه/گسترش داده می‌شه، نه یه رکورد جدید؛
+      این‌جوری قطع‌وصل‌های ریز و پیاپی حین یه استفاده‌ی پیوسته، لاگ رو شلوغ و گیج‌کننده نمی‌کنن.
+    - مجموع مدت‌زمان (بعد از ادغام) باید حداقل MIN_LOG_SESSION_SECONDS بشه تا اصلاً وارد لاگ بشه."""
     start_ts = _conn_started_at.pop(conn_id, None)
-    bytes_start = _conn_bytes_start.pop(conn_id, None)
     if start_ts is None:
-        return
-    duration = max(0, int(time.time() - start_ts))
-    if duration < MIN_LOG_SESSION_SECONDS:
         return
     link = LINKS.get(uuid)
     if not link:
@@ -240,15 +241,46 @@ def log_sub_disconnect(uuid: str, conn_id: str):
     sub_id = link.get("sub_id")
     if not sub_id:
         return
-    bytes_used = max(0, link.get("used_bytes", 0) - (bytes_start or 0))
-    now = datetime.now()
-    _append_sub_usage_event(sub_id, {
-        "ts": now.isoformat(),
-        "start_ts": (now - timedelta(seconds=duration)).isoformat(),
-        "event": "session",
-        "duration_seconds": duration,
-        "bytes_used": bytes_used,
-    })
+    now = time.time()
+    bytes_used = max(0, int(bytes_transferred or 0))
+
+    pending = _pending_session.get(sub_id)
+    if not pending or (start_ts - pending["last_seen"]) > COALESCE_GAP_SECONDS:
+        pending = {"start_ts": start_ts, "bytes": 0, "last_seen": now, "log_entry": None}
+        _pending_session[sub_id] = pending
+
+    pending["bytes"] += bytes_used
+    pending["last_seen"] = now
+    duration = int(pending["last_seen"] - pending["start_ts"])
+
+    if duration < MIN_LOG_SESSION_SECONDS and pending["log_entry"] is None:
+        return  # هنوز به حد نصاب نرسیده و قبلاً هم لاگ نشده؛ صبر می‌کنیم ببینیم ادامه داره یا نه
+
+    start_dt = datetime.fromtimestamp(pending["start_ts"])
+    end_dt = datetime.fromtimestamp(pending["last_seen"])
+
+    if pending["log_entry"] is not None:
+        entry = pending["log_entry"]
+        entry["ts"] = end_dt.isoformat()
+        entry["duration_seconds"] = duration
+        entry["bytes_used"] = pending["bytes"]
+    else:
+        sub = SUBS.get(sub_id)
+        if not sub:
+            return
+        log = sub.setdefault("usage_log", [])
+        entry = {
+            "ts": end_dt.isoformat(),
+            "start_ts": start_dt.isoformat(),
+            "event": "session",
+            "duration_seconds": duration,
+            "bytes_used": pending["bytes"],
+        }
+        log.append(entry)
+        if len(log) > MAX_USAGE_LOG_ENTRIES:
+            del log[: len(log) - MAX_USAGE_LOG_ENTRIES]
+        pending["log_entry"] = entry
+
     asyncio.create_task(save_state())
 
 # ── Startup / Shutdown ────────────────────────────────────────────────────────
@@ -682,7 +714,9 @@ async def create_sub(request: Request, _=Depends(require_auth)):
     qu = body.get("quota_unit") or "GB"
     quota_bytes = 0 if qv <= 0 else parse_size_to_bytes(qv, qu)
     exp_days = int(body.get("expires_days") or 0)
-    expires_at = (datetime.now() + timedelta(days=exp_days)).isoformat() if exp_days > 0 else None
+    lazy_start = bool(body.get("lazy_start"))
+    # اگه lazy_start فعال باشه، انقضا از الان شروع نمی‌شه؛ می‌مونه تا اولین اتصال واقعی (log_sub_connect).
+    expires_at = None if (exp_days <= 0 or lazy_start) else (datetime.now() + timedelta(days=exp_days)).isoformat()
     sub_id = generate_uuid()
     uuid_key = secrets.token_urlsafe(16)
     async with SUBS_LOCK:
@@ -696,6 +730,9 @@ async def create_sub(request: Request, _=Depends(require_auth)):
             "quota_bytes": quota_bytes,
             "active": True,
             "expires_at": expires_at,
+            "lazy_start": lazy_start,
+            "duration_days": exp_days if lazy_start else 0,
+            "activated_at": None,
         }
     asyncio.create_task(save_state())
     log_activity("sub", f"گروه «{name}» ساخته شد", "ok")
@@ -720,7 +757,9 @@ async def bulk_create_sub(request: Request, _=Depends(require_auth)):
     qu = body.get("quota_unit") or "GB"
     quota_bytes = 0 if qv <= 0 else parse_size_to_bytes(qv, qu)
     exp_days = int(body.get("expires_days") or 0)
-    expires_at = (datetime.now() + timedelta(days=exp_days)).isoformat() if exp_days > 0 else None
+    lazy_start = bool(body.get("lazy_start"))
+    # اگه lazy_start فعال باشه، انقضا از الان شروع نمی‌شه؛ می‌مونه تا اولین اتصال واقعی (log_sub_connect).
+    expires_at = None if (exp_days <= 0 or lazy_start) else (datetime.now() + timedelta(days=exp_days)).isoformat()
     items = body.get("links") or []
     if not isinstance(items, list) or not items:
         raise HTTPException(status_code=400, detail="حداقل یک کانفیگ لازم است")
@@ -740,6 +779,9 @@ async def bulk_create_sub(request: Request, _=Depends(require_auth)):
             "quota_bytes": quota_bytes,
             "active": True,
             "expires_at": expires_at,
+            "lazy_start": lazy_start,
+            "duration_days": exp_days if lazy_start else 0,
+            "activated_at": None,
         }
 
     created = []
@@ -859,6 +901,7 @@ async def list_subs(request: Request, _=Depends(require_auth)):
             "expires_at": expires_at,
             "is_expired": is_sub_expired(s),
             "days_left": days_left,
+            "pending_activation": bool(s.get("lazy_start") and not s.get("activated_at")),
             "public_url": f"https://{host}/p/{s['uuid_key']}",
             "sub_url": f"https://{host}/sub-group/{s['uuid_key']}",
         })
@@ -890,6 +933,13 @@ async def update_sub(sub_id: str, request: Request, _=Depends(require_auth)):
         if "expires_days" in body:
             ed = int(body.get("expires_days") or 0)
             s["expires_at"] = (datetime.now() + timedelta(days=ed)).isoformat() if ed > 0 else None
+        if "lazy_start" in body:
+            s["lazy_start"] = bool(body["lazy_start"])
+            if s["lazy_start"] and not s.get("activated_at"):
+                # وقتی lazy_start فعال می‌شه، انقضای فعلی (اگه بود) پاک می‌شه تا با اولین اتصال از نو محاسبه بشه
+                s["duration_days"] = int(body.get("expires_days") or s.get("duration_days") or 0)
+                s["expires_at"] = None
+                s["activated_at"] = None
     asyncio.create_task(save_state())
     action = "فعال" if body.get("active") is True else ("غیرفعال" if body.get("active") is False else None)
     if action:
@@ -990,14 +1040,18 @@ async def delete_sub(sub_id: str, _=Depends(require_auth)):
         if sub_id not in SUBS:
             raise HTTPException(status_code=404, detail="sub not found")
         name = SUBS[sub_id].get("name", sub_id)
+        link_ids = list(SUBS[sub_id].get("link_ids", []))
         del SUBS[sub_id]
     async with LINKS_LOCK:
-        for link in LINKS.values():
-            if link.get("sub_id") == sub_id:
-                link["sub_id"] = None
+        for lid in link_ids:
+            LINKS.pop(lid, None)
+        # هر لینک یتیمی هم که به این گروه اشاره می‌کرد ولی تو link_ids گروه نبود (نباید پیش بیاد
+        # ولی برای اطمینان) رو هم پاک می‌کنیم
+        for lid in [uid for uid, l in LINKS.items() if l.get("sub_id") == sub_id]:
+            LINKS.pop(lid, None)
     asyncio.create_task(save_state())
-    log_activity("sub", f"گروه «{name}» حذف شد", "warn")
-    return {"ok": True, "deleted": sub_id}
+    log_activity("sub", f"گروه «{name}» و {len(link_ids)} کانفیگش حذف شد", "warn")
+    return {"ok": True, "deleted": sub_id, "deleted_links": len(link_ids)}
 
 @app.post("/api/subs/{sub_id}/links")
 async def assign_link_to_sub(sub_id: str, request: Request, _=Depends(require_auth)):
@@ -1145,6 +1199,42 @@ async def delete_clean_ip(ip: str, _=Depends(require_auth)):
     log_activity("settings", f"آی‌پی تمیز «{ip}» حذف شد", "info")
     return {"ok": True, "clean_ips": SETTINGS["clean_ips"]}
 
+@app.patch("/api/settings/clean-ips/{ip}")
+async def update_clean_ip(ip: str, request: Request, _=Depends(require_auth)):
+    """ویرایش یک آی‌پی تمیز (آدرس و/یا برچسب). برخلاف حذف+افزودن دوباره، این کار خودِ آدرس
+    رو تو کانفیگ‌هایی هم که از قبل با این آی‌پی ساخته شده بودن به‌روز می‌کنه — یعنی برای اعمال
+    آی‌پی جدید روی ساب‌های ساخته‌شده لازم نیست ساب جدیدی بسازی."""
+    body = await request.json()
+    new_ip = str(body.get("ip") or "").strip()
+    new_label = str(body.get("label") or "").strip()[:40]
+    if not new_ip:
+        raise HTTPException(status_code=400, detail="آی‌پی نمی‌تواند خالی باشد")
+    ip_re = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]+$")
+    if not ip_re.match(new_ip):
+        raise HTTPException(status_code=400, detail="فرمت آی‌پی نامعتبر است")
+    async with SETTINGS_LOCK:
+        ips = SETTINGS.setdefault("clean_ips", [])
+        entry = next((x for x in ips if x["ip"] == ip), None)
+        if not entry:
+            raise HTTPException(status_code=404, detail="آی‌پی پیدا نشد")
+        if new_ip != ip and any(x["ip"] == new_ip for x in ips):
+            raise HTTPException(status_code=400, detail="این آی‌پی قبلاً اضافه شده")
+        entry["ip"] = new_ip
+        entry["label"] = new_label or new_ip
+
+    updated_links = 0
+    if new_ip != ip:
+        async with LINKS_LOCK:
+            for link in LINKS.values():
+                if link.get("route") == "clean_ip" and link.get("clean_ip") == ip:
+                    link["clean_ip"] = new_ip
+                    updated_links += 1
+
+    await save_state()
+    extra = f" و {updated_links} کانفیگ موجود هم به‌روز شد" if updated_links else ""
+    log_activity("settings", f"آی‌پی تمیز «{ip}» ویرایش شد{extra}", "info")
+    return {"ok": True, "clean_ips": SETTINGS["clean_ips"], "updated_links": updated_links}
+
 @app.patch("/api/settings")
 async def api_update_settings(request: Request, _=Depends(require_auth)):
     body = await request.json()
@@ -1198,12 +1288,13 @@ async def api_update_settings(request: Request, _=Depends(require_auth)):
 # ── Backup / Restore ──────────────────────────────────────────────────────────
 @app.get("/api/backup")
 async def api_backup(_=Depends(require_auth)):
-    async with LINKS_LOCK, SUBS_LOCK:
+    async with LINKS_LOCK, SUBS_LOCK, SETTINGS_LOCK:
         data = {
-            "version": 1,
+            "version": 2,
             "links": dict(LINKS),
             "subs": dict(SUBS),
             "password_hash": AUTH["password_hash"],
+            "settings": dict(SETTINGS),
             "saved_at": datetime.now().isoformat(),
         }
     payload = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
@@ -1236,6 +1327,14 @@ async def api_restore(request: Request, token=Depends(require_auth)):
     async with SUBS_LOCK:
         SUBS.clear()
         SUBS.update(new_subs)
+
+    # settings (شامل آی‌پی‌های تمیز، دامین سفارشی، پروکسی، پیام اتمام اعتبار و ...) — فقط تو
+    # بکاپ‌های نسخه‌ی جدید (v2 به بعد) وجود داره؛ بکاپ‌های قدیمی این کلید رو ندارن، مشکلی نیست.
+    new_settings = data.get("settings")
+    if isinstance(new_settings, dict):
+        async with SETTINGS_LOCK:
+            SETTINGS.clear()
+            SETTINGS.update(new_settings)
 
     new_pw_hash = data.get("password_hash")
     if new_pw_hash and new_pw_hash != AUTH["password_hash"]:
@@ -1515,6 +1614,7 @@ async def create_link(request: Request, _=Depends(require_auth)):
         ip_limit=ip_limit,
         speed_limit_bytes=speed_limit_bytes,
         route=body.get("route") or "domain",
+        clean_ip=body.get("clean_ip") or "",
     )
 
     # اگه یک یا چند آی‌پی تمیز هم انتخاب شده باشه، به ازای هرکدوم یه کانفیگ مستقل دیگه (با همون
@@ -1615,9 +1715,14 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             except (TypeError, ValueError):
                 p = DEFAULT_PORT
             link["port"] = p if (MIN_PORT <= p <= MAX_PORT) else DEFAULT_PORT
+        if "protocol" in body:
+            proto = str(body.get("protocol") or DEFAULT_PROTOCOL)
+            link["protocol"] = proto if proto in PROTOCOLS else DEFAULT_PROTOCOL
         if "route" in body:
             rt = str(body.get("route") or "domain")
-            link["route"] = rt if rt in ("domain", "proxy") else "domain"
+            link["route"] = rt if rt in ("domain", "proxy", "clean_ip", "threexui") else "domain"
+        if "clean_ip" in body:
+            link["clean_ip"] = str(body.get("clean_ip") or "").strip()[:64]
         if "ip_limit" in body:
             try:
                 il = int(body.get("ip_limit") or 0)
@@ -1630,7 +1735,7 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             link["speed_limit_bytes"] = 0 if sv <= 0 else parse_speed_to_bytes(sv, su)
             from speed_limit import reset_bucket
             reset_bucket(uid)
-        if any(k in body for k in ("label", "note", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value")):
+        if any(k in body for k in ("label", "note", "limit_value", "expires_days", "protocol", "route", "clean_ip", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value")):
             log_activity("link", f"کانفیگ «{link['label']}» ویرایش شد", "info")
         new_sub = body.get("sub_id", "UNCHANGED")
         if new_sub != "UNCHANGED":
@@ -1781,6 +1886,8 @@ async def public_sub_data(uuid_key: str, request: Request):
         "sub_active": sub_active,
         "sub_expired": sub_expired,
         "quota_exhausted": quota_exhausted,
+        "pending_activation": bool(sub.get("lazy_start") and not sub.get("activated_at")),
+        "duration_days": sub.get("duration_days", 0),
         "expired_message": SETTINGS.get("expired_message", DEFAULT_EXPIRED_MESSAGE),
         "expires_at": sub.get("expires_at"),
         "created_at": sub.get("created_at"),
