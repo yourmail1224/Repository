@@ -935,6 +935,31 @@ a{color:inherit;text-decoration:none}
     <input type="hidden" id="el-uuid">
     <div class="fg" style="margin-bottom:13px"><label>عنوان</label><input class="fi" id="el-label" style="width:100%"></div>
     <div class="form-row" style="margin-bottom:13px">
+      <div class="fg" style="flex:1"><label>پروتکل</label>
+        <select class="fs" id="el-protocol" style="width:100%">
+          <option value="vless-ws">VLESS / WS</option>
+          <option value="xhttp-packet-up">XHTTP · packet-up</option>
+          <option value="xhttp-stream-up">XHTTP · stream-up</option>
+        </select>
+      </div>
+      <div class="fg" style="flex:1"><label>گروه ساب</label>
+        <select class="fs" id="el-sub" style="width:100%"><option value="">— بدون گروه —</option></select>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:13px">
+      <label>مسیر اتصال</label>
+      <div class="chip-row" id="el-route-chips">
+        <span class="chip" data-route="domain" onclick="setElRoute('domain',this)"><i class="ti ti-world" style="font-size:11px"></i> دامنه اصلی</span>
+        <span class="chip" data-route="proxy" onclick="setElRoute('proxy',this)"><i class="ti ti-route" style="font-size:11px"></i> پروکسی (Railway)</span>
+        <span class="chip" data-route="clean_ip" onclick="setElRoute('clean_ip',this)"><i class="ti ti-server-2" style="font-size:11px"></i> آی‌پی تمیز</span>
+        <span class="chip" data-route="threexui" onclick="setElRoute('threexui',this)"><i class="ti ti-server" style="font-size:11px"></i> 3x-ui</span>
+      </div>
+    </div>
+    <div class="fg" id="el-cleanip-block" style="margin-bottom:13px;display:none">
+      <label>آی‌پی تمیز</label>
+      <select class="fs" id="el-cleanip" style="width:100%"></select>
+    </div>
+    <div class="form-row" style="margin-bottom:13px">
       <div class="fg" style="flex:1"><label>سهمیه (0 = نامحدود)</label><input class="fi" id="el-val" type="number" min="0" step="0.1" style="width:100%"></div>
       <div class="fg"><label>واحد</label><select class="fs" id="el-unit"><option value="GB">GB</option><option value="MB">MB</option></select></div>
     </div>
@@ -965,7 +990,7 @@ a{color:inherit;text-decoration:none}
       <div class="fg" style="flex:1"><label>محدودیت سرعت (0 = نامحدود)</label><input class="fi" id="el-speed" type="number" min="0" step="0.5" style="width:100%"></div>
       <div class="fg"><label>واحد</label><select class="fs" id="el-speed-unit"><option value="MBIT">Mbps</option><option value="KB">KB/s</option><option value="MB">MB/s</option></select></div>
     </div>
-    <div class="cl"><i class="ti ti-info-circle"></i><span>برای حفظ انقضای فعلی، فیلد انقضا را صفر بگذارید.</span></div>
+    <div class="cl"><i class="ti ti-info-circle"></i><span>برای حفظ انقضای فعلی، فیلد انقضا را صفر بگذارید. اگه مسیر رو «آی‌پی تمیز» انتخاب کنی، باید از لیست پایینش هم یکی رو مشخص کنی.</span></div>
     <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-o" onclick="closeModal('modal-edit-link')">انصراف</button>
       <button class="btn btn-p" onclick="saveEditLink()"><i class="ti ti-check"></i> ذخیره تغییرات</button>
@@ -1929,11 +1954,17 @@ async function createLink(){
     loadLinks();
   }catch(e){toast('خطا در ساخت','err')}
 }
+function setElRoute(route,el){
+  document.querySelectorAll('#el-route-chips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('el-cleanip-block').style.display=route==='clean_ip'?'block':'none';
+}
 function openEditLink(uuid){
   const l=allLinksList.find(x=>x.uuid===uuid);
   if(!l)return;
   document.getElementById('el-uuid').value=uuid;
   document.getElementById('el-label').value=l.label;
+  document.getElementById('el-protocol').value=l.protocol||'vless-ws';
   document.getElementById('el-note').value=l.note||'';
   if(l.limit_bytes===0){document.getElementById('el-val').value='';document.getElementById('el-unit').value='GB';}
   else{document.getElementById('el-val').value=(l.limit_bytes/1024/1024).toFixed(0);document.getElementById('el-unit').value='MB';}
@@ -1944,11 +1975,28 @@ function openEditLink(uuid){
   document.getElementById('el-iplimit').value=l.ip_limit||0;
   if(!l.speed_limit_bytes){document.getElementById('el-speed').value='0';document.getElementById('el-speed-unit').value='MBIT';}
   else{document.getElementById('el-speed').value=(l.speed_limit_bytes*8/1024/1024).toFixed(2);document.getElementById('el-speed-unit').value='MBIT';}
+
+  // گروه ساب
+  const subSel=document.getElementById('el-sub');
+  subSel.innerHTML='<option value="">— بدون گروه —</option>'+allSubsList.map(s=>`<option value="${esc(s.sub_id)}">${esc(s.name)}</option>`).join('');
+  subSel.value=l.sub_id||'';
+
+  // آی‌پی‌های تمیز
+  const cleanSel=document.getElementById('el-cleanip');
+  cleanSel.innerHTML=allCleanIps.map(x=>`<option value="${esc(x.id||x.ip)}">${esc(x.label&&x.label!==x.ip?x.label:x.ip)} (${esc(x.ip)})</option>`).join('');
+  if(l.clean_ip_id)cleanSel.value=l.clean_ip_id;
+
+  // مسیر اتصال
+  const route=l.route||'domain';
+  document.querySelectorAll('#el-route-chips .chip').forEach(c=>c.classList.toggle('active',c.dataset.route===route));
+  document.getElementById('el-cleanip-block').style.display=route==='clean_ip'?'block':'none';
+
   openModal('modal-edit-link');
 }
 async function saveEditLink(){
   const uuid=document.getElementById('el-uuid').value;
   const label=document.getElementById('el-label').value.trim();
+  const protocol=document.getElementById('el-protocol').value;
   const note=document.getElementById('el-note').value.trim();
   const val=document.getElementById('el-val').value;
   const unit=document.getElementById('el-unit').value;
@@ -1959,13 +2007,19 @@ async function saveEditLink(){
   const ip_limit=Number(document.getElementById('el-iplimit').value)||0;
   const speed_limit_value=Number(document.getElementById('el-speed').value)||0;
   const speed_limit_unit=document.getElementById('el-speed-unit').value;
-  const body={label,note,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit};
+  const route=document.querySelector('#el-route-chips .chip.active')?.dataset.route||'domain';
+  const sub_id=document.getElementById('el-sub').value||null;
+  if(route==='clean_ip' && !document.getElementById('el-cleanip').value){
+    toast('برای مسیر «آی‌پی تمیز» باید یکی رو از لیست انتخاب کنی','err');return;
+  }
+  const body={label,protocol,note,limit_value:val||0,limit_unit:unit,fingerprint,alpn,port,ip_limit,speed_limit_value,speed_limit_unit,route,sub_id};
+  if(route==='clean_ip')body.clean_ip_id=document.getElementById('el-cleanip').value;
   if(exp&&Number(exp)>0)body.expires_days=Number(exp);
   try{
     const r=await authF('/api/links/'+uuid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error();
     closeModal('modal-edit-link');
-    toast('کانفیگ ویرایش شد ✓','ok');loadLinks();
+    toast('کانفیگ ویرایش شد ✓','ok');loadLinks();loadSubs();
   }catch(e){toast('خطا در ویرایش','err')}
 }
 async function toggleActive(uuid,newState){

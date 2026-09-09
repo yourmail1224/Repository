@@ -1738,6 +1738,9 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
         if "fingerprint" in body:
             fp = str(body.get("fingerprint") or DEFAULT_FINGERPRINT).strip().lower()
             link["fingerprint"] = fp if fp in FINGERPRINTS else DEFAULT_FINGERPRINT
+        if "protocol" in body:
+            proto = str(body.get("protocol") or DEFAULT_PROTOCOL)
+            link["protocol"] = proto if proto in PROTOCOLS else DEFAULT_PROTOCOL
         if "alpn" in body:
             link["alpn"] = str(body.get("alpn") or "").strip()[:100]
         if "port" in body:
@@ -1748,7 +1751,12 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             link["port"] = p if (MIN_PORT <= p <= MAX_PORT) else DEFAULT_PORT
         if "route" in body:
             rt = str(body.get("route") or "domain")
-            link["route"] = rt if rt in ("domain", "proxy") else "domain"
+            link["route"] = rt if rt in ("domain", "proxy", "clean_ip", "threexui") else "domain"
+        if "clean_ip_id" in body:
+            cid = str(body.get("clean_ip_id") or "").strip()
+            entry = find_clean_ip_entry(cid) if cid else None
+            link["clean_ip_id"] = entry.get("id", "") if entry else ""
+            link["clean_ip"] = entry.get("ip", "") if entry else ""
         if "ip_limit" in body:
             try:
                 il = int(body.get("ip_limit") or 0)
@@ -1761,7 +1769,7 @@ async def update_link(uid: str, request: Request, _=Depends(require_auth)):
             link["speed_limit_bytes"] = 0 if sv <= 0 else parse_speed_to_bytes(sv, su)
             from speed_limit import reset_bucket
             reset_bucket(uid)
-        if any(k in body for k in ("label", "note", "limit_value", "expires_days", "fingerprint", "alpn", "port", "ip_limit", "speed_limit_value")):
+        if any(k in body for k in ("label", "note", "limit_value", "expires_days", "fingerprint", "protocol", "alpn", "port", "route", "clean_ip_id", "ip_limit", "speed_limit_value")):
             log_activity("link", f"کانفیگ «{link['label']}» ویرایش شد", "info")
         new_sub = body.get("sub_id", "UNCHANGED")
         if new_sub != "UNCHANGED":
