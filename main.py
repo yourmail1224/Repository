@@ -1228,9 +1228,14 @@ async def edit_clean_ip(cid: str, request: Request, _=Depends(require_auth)):
     body = await request.json()
     async with SETTINGS_LOCK:
         ips = SETTINGS.setdefault("clean_ips", [])
-        entry = next((x for x in ips if x.get("id") == cid), None)
+        # سازگاری با ورودی‌های قدیمی‌تر که هنوز id ندارن (مثلاً از یه بکاپ قدیمی): علاوه بر id،
+        # بر اساس خودِ آدرس ip هم لوکاپ کن، وگرنه فرانت‌اند که برای این‌ها از خودِ ip به‌عنوان
+        # شناسه استفاده می‌کنه با خطای «آی‌پی پیدا نشد» مواجه می‌شه.
+        entry = next((x for x in ips if x.get("id") == cid or x.get("ip") == cid), None)
         if not entry:
             raise HTTPException(status_code=404, detail="آی‌پی پیدا نشد")
+        if not entry.get("id"):
+            entry["id"] = generate_uuid()
         if "ip" in body:
             new_ip = str(body["ip"]).strip()
             if not new_ip:
@@ -1238,7 +1243,7 @@ async def edit_clean_ip(cid: str, request: Request, _=Depends(require_auth)):
             ip_re = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]+$")
             if not ip_re.match(new_ip):
                 raise HTTPException(status_code=400, detail="فرمت آی‌پی نامعتبر است")
-            if any(x.get("id") != cid and x["ip"] == new_ip for x in ips):
+            if any(x is not entry and x["ip"] == new_ip for x in ips):
                 raise HTTPException(status_code=400, detail="این آی‌پی قبلاً برای یه مورد دیگه ثبت شده")
             entry["ip"] = new_ip
         if "label" in body:
@@ -1628,6 +1633,16 @@ async def create_link(request: Request, _=Depends(require_auth)):
     su = body.get("speed_limit_unit") or "MBIT"
     speed_limit_bytes = 0 if sv <= 0 else parse_speed_to_bytes(sv, su)
 
+    primary_route = body.get("route") or "domain"
+    primary_clean_ip, primary_clean_ip_id = "", ""
+    if primary_route == "clean_ip":
+        # اگه مسیر خودِ کانفیگ اصلی هم «آی‌پی تمیز» باشه (نه فقط از طریق آرایه‌ی clean_ips)،
+        # باید همینجا هم آدرسش از تنظیمات resolve بشه، وگرنه کانفیگ بی‌آدرس/خراب ساخته می‌شه.
+        entry = find_clean_ip_entry(str(body.get("clean_ip_id") or "").strip())
+        if not entry:
+            raise HTTPException(status_code=400, detail="برای مسیر «آی‌پی تمیز» باید یک آی‌پی معتبر انتخاب کنی")
+        primary_clean_ip, primary_clean_ip_id = entry.get("ip", ""), entry.get("id", "")
+
     uid, link = await make_link(
         label=body.get("label") or "لینک جدید",
         limit_bytes=limit_bytes,
@@ -1640,7 +1655,9 @@ async def create_link(request: Request, _=Depends(require_auth)):
         port=port,
         ip_limit=ip_limit,
         speed_limit_bytes=speed_limit_bytes,
-        route=body.get("route") or "domain",
+        route=primary_route,
+        clean_ip=primary_clean_ip,
+        clean_ip_id=primary_clean_ip_id,
     )
 
     # اگه یک یا چند آی‌پی تمیز هم انتخاب شده باشه، به ازای هرکدوم یه کانفیگ مستقل دیگه ساخته می‌شه

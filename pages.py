@@ -851,14 +851,14 @@ a{color:inherit;text-decoration:none}
   </div>
 </div>
 <div class="modal-bg" id="modal-edit-sub">
-  <div class="modal-v2" style="max-width:460px">
+  <div class="modal-v2" style="max-width:460px;max-height:88vh;display:flex;flex-direction:column">
     <div class="modal-v2-head">
       <button class="modal-v2-close" onclick="closeModal('modal-edit-sub')"><i class="ti ti-x"></i></button>
       <div class="modal-v2-icon"><i class="ti ti-edit"></i></div>
       <div class="modal-v2-title">ویرایش گروه</div>
-      <div class="modal-v2-sub">اسم، رمز، حجم مشترک و انقضای این گروه رو تغییر بده</div>
+      <div class="modal-v2-sub">اسم، رمز، حجم مشترک، انقضا و کانفیگ‌های این گروه رو تغییر بده</div>
     </div>
-    <div class="modal-v2-body">
+    <div class="modal-v2-body" style="overflow-y:auto">
       <div class="modal-v2-field">
         <label><i class="ti ti-tag"></i> نام گروه</label>
         <input class="modal-v2-input" id="es-name">
@@ -886,6 +886,47 @@ a{color:inherit;text-decoration:none}
         <input type="checkbox" id="es-lazy-start" style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0">
         <span>انقضا از اولین اتصال واقعی کاربر شروع بشه (اگه هنوز فعال نشده باشه)</span>
       </label>
+      <div class="modal-v2-field" style="margin-top:16px;margin-bottom:8px">
+        <label style="display:flex;align-items:center;justify-content:space-between">
+          <span><i class="ti ti-apps"></i> کانفیگ‌های این گروه</span>
+          <button class="btn btn-sm btn-g" onclick="esToggleAddConfig()" id="es-add-cfg-toggle-btn" type="button"><i class="ti ti-plus"></i> افزودن کانفیگ</button>
+        </label>
+        <div id="es-configs-list" style="display:flex;flex-direction:column;gap:7px;margin-top:8px">در حال بارگذاری...</div>
+      </div>
+      <div id="es-add-cfg-box" style="display:none;border:1px solid var(--card-b);border-radius:12px;padding:12px;margin-bottom:8px;background:rgba(124,58,237,.03)">
+        <div class="form-row" style="margin-bottom:10px">
+          <div class="fg" style="flex:1"><label style="font-size:11px">پروتکل</label>
+            <select class="fs" id="es-nc-protocol" style="width:100%">
+              <option value="vless-ws">VLESS / WS</option>
+              <option value="xhttp-packet-up">XHTTP · packet-up</option>
+              <option value="xhttp-stream-up">XHTTP · stream-up</option>
+            </select>
+          </div>
+          <div class="fg" style="flex:1"><label style="font-size:11px">Fingerprint</label>
+            <select class="fs" id="es-nc-fp" style="width:100%">
+              <option value="chrome">chrome</option><option value="firefox">firefox</option><option value="safari">safari</option>
+              <option value="ios">ios</option><option value="android">android</option><option value="edge">edge</option>
+              <option value="360">360</option><option value="qq">qq</option><option value="random">random</option><option value="randomized">randomized</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:10px">
+          <div class="fg" style="flex:1"><label style="font-size:11px">پورت اتصال</label><input class="fi" id="es-nc-port" type="number" min="1" max="65535" value="443" style="width:100%"></div>
+          <div class="fg" style="flex:1"><label style="font-size:11px">محدودیت آی‌پی (۰=نامحدود)</label><input class="fi" id="es-nc-iplimit" type="number" min="0" step="1" value="0" style="width:100%"></div>
+        </div>
+        <div class="form-row" style="margin-bottom:10px">
+          <div class="fg" style="flex:1"><label style="font-size:11px">محدودیت سرعت (۰=نامحدود)</label><input class="fi" id="es-nc-speed" type="number" min="0" step="0.5" value="0" style="width:100%"></div>
+          <div class="fg"><label style="font-size:11px">واحد</label><select class="fs" id="es-nc-speed-unit"><option value="MBIT">Mbps</option><option value="KB">KB/s</option><option value="MB">MB/s</option></select></div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--t2);margin-bottom:6px;cursor:pointer">
+          <input type="checkbox" id="es-nc-base" checked style="accent-color:var(--accent)"> شامل مسیر پایه (دامنه اصلی) هم بشه
+        </label>
+        <div id="es-nc-cleanips" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-o btn-sm" onclick="esToggleAddConfig()" type="button">انصراف</button>
+          <button class="btn btn-p btn-sm" onclick="esAddGroupConfig()" type="button"><i class="ti ti-plus"></i> افزودن</button>
+        </div>
+      </div>
       <div class="modal-v2-footer">
         <button class="btn btn-o" onclick="closeModal('modal-edit-sub')" style="flex:.6">انصراف</button>
         <button class="btn btn-pur" onclick="saveEditSub()"><i class="ti ti-device-floppy"></i> ذخیره تغییرات</button>
@@ -2376,8 +2417,101 @@ async function openEditSub(sub_id){
     else{document.getElementById('es-quota-val').value='';document.getElementById('es-quota-unit').value='GB';}
     document.getElementById('es-exp').value=s.days_left!=null?s.days_left:'';
     document.getElementById('es-lazy-start').checked=!!s.lazy_start;
+    document.getElementById('es-add-cfg-box').style.display='none';
+    loadEditSubConfigs(sub_id);
     openModal('modal-edit-sub');
   }catch(e){toast('خطا در بارگذاری گروه','err')}
+}
+let esGroupConfigs=[];
+async function loadEditSubConfigs(sub_id){
+  const box=document.getElementById('es-configs-list');
+  box.innerHTML='<div style="color:var(--t3);font-size:11px;text-align:center;padding:10px"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i></div>';
+  try{
+    const [lr,setr]=await Promise.all([authF('/api/links'),authF('/api/settings')]);
+    const {links=[]}=await lr.json();
+    const settingsData=await setr.json().catch(()=>({clean_ips:[]}));
+    // این دو تا رو آپدیت می‌کنیم چون openEditLink و فرم افزودن کانفیگ جدید بهشون وابسته‌ن
+    allLinksList=links;
+    allCleanIps=settingsData.clean_ips||allCleanIps;
+    esGroupConfigs=links.filter(l=>l.sub_id===sub_id);
+    renderEsConfigsList();
+    const cleanBox=document.getElementById('es-nc-cleanips');
+    if(allCleanIps.length){
+      cleanBox.innerHTML='<div style="font-size:11px;color:var(--t2);margin-bottom:2px">همچنین کانفیگ‌های آی‌پی تمیز زیر هم اضافه بشن:</div>'+allCleanIps.map(x=>`
+        <label style="display:flex;align-items:center;gap:8px;font-size:11px;cursor:pointer">
+          <input type="checkbox" class="es-nc-cleanip-chk" value="${esc(x.id||x.ip)}" style="accent-color:var(--accent)">
+          <span style="font-family:ui-monospace,monospace;direction:ltr">${esc(x.ip)}</span>
+          ${x.label&&x.label!==x.ip?`<span style="color:var(--t3)">(${esc(x.label)})</span>`:''}
+        </label>`).join('');
+    }else{
+      cleanBox.innerHTML='<div style="font-size:11px;color:var(--t3)">هیچ آی‌پی تمیزی تو تنظیمات ثبت نشده</div>';
+    }
+  }catch(e){box.innerHTML='<div style="color:var(--red);font-size:11px;text-align:center;padding:10px">خطا در بارگذاری کانفیگ‌ها</div>'}
+}
+function renderEsConfigsList(){
+  const box=document.getElementById('es-configs-list');
+  if(!esGroupConfigs.length){box.innerHTML='<div style="color:var(--t3);font-size:11px;text-align:center;padding:10px">هنوز کانفیگی در این گروه نیست</div>';return;}
+  box.innerHTML=esGroupConfigs.map(l=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--card-b);border-radius:10px">
+      ${protoBadge(l.protocol)}
+      <span style="font-size:11.5px;color:var(--t1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.label)}</span>
+      ${l.route==='clean_ip'?'<span class="cfg-sub-tag" title="آی‌پی تمیز"><i class="ti ti-server-2"></i></span>':''}
+      <span style="font-size:10px;color:var(--t3)">:${l.port||443}</span>
+      <button class="btn btn-sm btn-amber btn-icon" onclick="openEditLink('${l.uuid}')" title="ویرایش این کانفیگ"><i class="ti ti-edit"></i></button>
+      <button class="btn btn-sm btn-d btn-icon" onclick="esDeleteGroupConfig('${l.uuid}')" title="حذف از گروه"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+async function esDeleteGroupConfig(uuid){
+  if(!confirm('این کانفیگ حذف بشه؟'))return;
+  try{
+    const r=await authF('/api/links/'+uuid,{method:'DELETE'});
+    if(!r.ok)throw new Error();
+    toast('حذف شد ✓','ok');
+    esGroupConfigs=esGroupConfigs.filter(x=>x.uuid!==uuid);
+    renderEsConfigsList();
+    loadLinks();loadSubs();
+  }catch(e){toast('خطا در حذف','err')}
+}
+function esToggleAddConfig(){
+  const box=document.getElementById('es-add-cfg-box');
+  box.style.display=box.style.display==='none'?'block':'none';
+}
+async function esAddGroupConfig(){
+  if(!esEditingSubId)return;
+  const protocol=document.getElementById('es-nc-protocol').value;
+  const fingerprint=document.getElementById('es-nc-fp').value||'chrome';
+  const port=Number(document.getElementById('es-nc-port').value)||443;
+  const ip_limit=Number(document.getElementById('es-nc-iplimit').value)||0;
+  const speed_limit_value=Number(document.getElementById('es-nc-speed').value)||0;
+  const speed_limit_unit=document.getElementById('es-nc-speed-unit').value;
+  const includeBase=document.getElementById('es-nc-base').checked;
+  const cleanIds=[...document.querySelectorAll('.es-nc-cleanip-chk:checked')].map(c=>c.value);
+  if(!includeBase && !cleanIds.length){toast('یا مسیر پایه رو نگه دار، یا حداقل یه آی‌پی تمیز انتخاب کن','err');return;}
+  const sub=allSubsRaw.find(s=>s.sub_id===esEditingSubId);
+  const baseLabel=(sub?.name||'گروه')+' - '+({'vless-ws':'VLESS','xhttp-packet-up':'XHTTP-P','xhttp-stream-up':'XHTTP-S'}[protocol]||protocol);
+  try{
+    if(includeBase){
+      const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        label:baseLabel,sub_id:esEditingSubId,protocol,fingerprint,port,ip_limit,speed_limit_value,speed_limit_unit,
+        route:'domain',clean_ips:cleanIds
+      })});
+      if(!r.ok)throw new Error();
+    }else{
+      // بدون مسیر پایه: برای هر آی‌پی تمیز یه کانفیگ جدا با مسیر clean_ip می‌سازیم
+      for(const cid of cleanIds){
+        const r=await authF('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          label:baseLabel,sub_id:esEditingSubId,protocol,fingerprint,port,ip_limit,speed_limit_value,speed_limit_unit,
+          route:'clean_ip',clean_ip_id:cid
+        })});
+        if(!r.ok)throw new Error();
+      }
+    }
+    toast('کانفیگ اضافه شد ✓','ok');
+    esToggleAddConfig();
+    document.querySelectorAll('.es-nc-cleanip-chk').forEach(c=>c.checked=false);
+    loadEditSubConfigs(esEditingSubId);
+    loadLinks();loadSubs();
+  }catch(e){toast('خطا در افزودن کانفیگ','err')}
 }
 async function saveEditSub(){
   if(!esEditingSubId)return;
