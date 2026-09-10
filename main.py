@@ -591,10 +591,9 @@ def build_singbox_config(links: list, host: str, profile_name: str = "Config") -
         "log": {"level": "warn"},
         "dns": {
             "servers": [
-                {"type": "udp", "tag": "dns-remote", "server": "1.1.1.1"},
-                {"type": "udp", "tag": "dns-direct", "server": "1.1.1.1", "detour": "direct"},
+                {"type": "local", "tag": "dns-local"},
+                {"type": "udp", "tag": "dns-remote", "server": "1.1.1.1", "detour": "proxy"},
             ],
-            "rules": [{"outbound": "direct", "server": "dns-direct"}],
             "final": "dns-remote",
             "strategy": "prefer_ipv4",
         },
@@ -607,7 +606,6 @@ def build_singbox_config(links: list, host: str, profile_name: str = "Config") -
                 "auto_route": True,
                 "strict_route": True,
                 "stack": "system",
-                "sniff": True,
             }
         ],
         "outbounds": [selector] + outbounds + [
@@ -620,6 +618,12 @@ def build_singbox_config(links: list, host: str, profile_name: str = "Config") -
                 {"ip_is_private": True, "outbound": "direct"},
             ],
             "auto_detect_interface": True,
+            # این‌طوری خودِ کانفیگِ vless (که سرورش با دامنه مشخص شده) از DNS محلی/مستقیم استفاده
+            # می‌کنه تا برای resolve کردن آدرس سرورِ خودش، مجبور به عبور از تونل نشه (که یه حلقه‌ی
+            # بی‌نهایت می‌سازه: برای وصل شدن به پروکسی، اول باید پروکسی resolve بشه!). ترافیک عادیِ
+            # اپ‌ها (که با قانون hijack-dns بالا به DNS داخلی سینگ‌باکس هدایت می‌شه) از dns-remote
+            # (که detour‌ش proxy‌ست) استفاده می‌کنه.
+            "default_domain_resolver": "dns-local",
             "final": "proxy",
         },
     }
