@@ -456,6 +456,28 @@ def build_config_remark(link: dict) -> str:
     parts = [base, vol_part] + ([day_part] if day_part else [])
     return " | ".join(parts)
 
+def resolve_link_connection(link: dict, host: str) -> dict:
+    """آدرس/پورت/سکیوریتیِ واقعیِ اتصال یه کانفیگ رو بر اساس route‌ش برمی‌گردونه — دقیقاً همون
+    منطقی که vless_link_for_link برای ساخت لینک vless:// استفاده می‌کنه، اینجا هم به‌عنوان یه
+    تابع مستقل جدا شده تا سازنده‌ی کانفیگ sing-box هم بتونه (بدون تکرار/واگرایی منطق) ازش
+    استفاده کنه. خروجی: {"address","port","security"}."""
+    route = link.get("route", "domain")
+    if route == "proxy":
+        proxy_addr = SETTINGS.get("proxy_address") or ""
+        proxy_port = SETTINGS.get("proxy_port") or 0
+        if proxy_addr and proxy_port:
+            return {"address": proxy_addr, "port": proxy_port, "security": "none"}
+    elif route == "clean_ip":
+        clean_ip = resolve_clean_ip(link)
+        if clean_ip:
+            return {"address": clean_ip, "port": link.get("port") or DEFAULT_PORT, "security": "tls"}
+    elif route == "threexui":
+        tx_addr = SETTINGS.get("threexui_address") or ""
+        tx_port = SETTINGS.get("threexui_port") or 0
+        if tx_addr and tx_port:
+            return {"address": tx_addr, "port": tx_port, "security": "tls"}
+    return {"address": host, "port": link.get("port") or DEFAULT_PORT, "security": "tls"}
+
 def vless_link_for_link(link: dict, uid: str, host: str, dynamic_remark: bool = False) -> str:
     """generate_vless_link رو با تنظیمات دستی همون کانفیگ (fingerprint/alpn/port) صدا می‌زنه.
     وقتی dynamic_remark=True باشه (برای سرو کردن ساب داخل اپ v2ray)، به‌جای اسم خام،
@@ -475,33 +497,26 @@ def vless_link_for_link(link: dict, uid: str, host: str, dynamic_remark: bool = 
     proto = link.get("protocol", DEFAULT_PROTOCOL)
     remark = build_config_remark(link) if dynamic_remark else (link.get('label') or "Config")
     route = link.get("route", "domain")
+    conn = resolve_link_connection(link, host)
 
-    if route == "proxy":
-        proxy_addr = SETTINGS.get("proxy_address") or ""
-        proxy_port = SETTINGS.get("proxy_port") or 0
-        if proxy_addr and proxy_port:
-            return generate_vless_link(
-                uid, host, remark=remark, protocol=proto,
-                fingerprint=link.get("fingerprint"), alpn=link.get("alpn"),
-                port=proxy_port, address=proxy_addr, security="none",
-            )
-    elif route == "clean_ip":
-        clean_ip = resolve_clean_ip(link)
-        if clean_ip:
-            return generate_vless_link(
-                uid, host, remark=remark, protocol=proto,
-                fingerprint=link.get("fingerprint"), alpn=link.get("alpn"),
-                port=link.get("port"), address=clean_ip, security="tls",
-            )
-    elif route == "threexui":
-        tx_addr = SETTINGS.get("threexui_address") or ""
-        tx_port = SETTINGS.get("threexui_port") or 0
-        if tx_addr and tx_port:
-            return generate_vless_link(
-                uid, tx_addr, remark=remark, protocol=proto,
-                fingerprint=link.get("fingerprint"), alpn=link.get("alpn"),
-                port=tx_port, address=tx_addr, security="tls",
-            )
+    if route == "proxy" and conn["security"] == "none":
+        return generate_vless_link(
+            uid, host, remark=remark, protocol=proto,
+            fingerprint=link.get("fingerprint"), alpn=link.get("alpn"),
+            port=conn["port"], address=conn["address"], security="none",
+        )
+    elif route == "clean_ip" and conn["address"] != host:
+        return generate_vless_link(
+            uid, host, remark=remark, protocol=proto,
+            fingerprint=link.get("fingerprint"), alpn=link.get("alpn"),
+            port=conn["port"], address=conn["address"], security="tls",
+        )
+    elif route == "threexui" and conn["address"]:
+        return generate_vless_link(
+            uid, conn["address"], remark=remark, protocol=proto,
+            fingerprint=link.get("fingerprint"), alpn=link.get("alpn"),
+            port=conn["port"], address=conn["address"], security="tls",
+        )
 
     return generate_vless_link(
         uid, host,
@@ -511,6 +526,103 @@ def vless_link_for_link(link: dict, uid: str, host: str, dynamic_remark: bool = 
         alpn=link.get("alpn"),
         port=link.get("port"),
     )
+
+def build_singbox_vless_outbound(link: dict, uid: str, host: str, tag: str) -> dict | None:
+    """یه outbound از نوع vless برای sing-box (خودِ رسمی SagerNet که اپ SFA/sing-box ازش استفاده
+    می‌کنه) می‌سازه. فقط پروتکل vless-ws پشتیبانی می‌شه چون sing-box رسمی از ترنسپورت XHTTP
+    پشتیبانی نمی‌کنه (فقط فورک‌های غیررسمی مثل Hiddify این رو دارن) — برای بقیه‌ی پروتکل‌ها None
+    برمی‌گرده تا خراب/ناقص ساخته نشه."""
+    proto = link.get("protocol", DEFAULT_PROTOCOL)
+    if proto != "vless-ws":
+        return None
+    conn = resolve_link_connection(link, host)
+    fp = (link.get("fingerprint") or DEFAULT_FINGERPRINT).strip() or DEFAULT_FINGERPRINT
+    if fp not in FINGERPRINTS:
+        fp = DEFAULT_FINGERPRINT
+    alpn_val = (link.get("alpn") or "").strip() or DEFAULT_ALPN_BY_PROTOCOL.get(proto, "http/1.1")
+    ws_path = f"/ws/{uid}"
+    outbound = {
+        "type": "vless",
+        "tag": tag,
+        "server": conn["address"],
+        "server_port": conn["port"],
+        "uuid": uid,
+        "packet_encoding": "xudp",
+        "transport": {
+            "type": "ws",
+            "path": ws_path,
+            "headers": {"Host": host},
+        },
+    }
+    if conn["security"] == "tls":
+        outbound["tls"] = {
+            "enabled": True,
+            "server_name": host,
+            "utls": {"enabled": True, "fingerprint": fp},
+            "alpn": [a.strip() for a in alpn_val.split(",") if a.strip()],
+        }
+    return outbound
+
+def build_singbox_config(links: list, host: str, profile_name: str = "Config") -> dict:
+    """یه کانفیگ کامل و اجراپذیر sing-box (با TUN، برای وی‌پی‌ان سراسری) از رو یه لیست کانفیگ
+    می‌سازه. فقط سینتکس فعلی/غیرمنسوخِ سینگ‌باکس (نسخه‌های ۱٫۱۱ به بعد) استفاده می‌شه: فیلد
+    address (نه inet4_address قدیمی) برای tun، و rule action به‌جای outbound قدیمیِ block/dns."""
+    outbounds = []
+    tags = []
+    for l in links:
+        base_tag = (l.get("label") or "Config").strip() or "Config"
+        tag = base_tag
+        i = 2
+        while tag in tags:
+            tag = f"{base_tag} {i}"
+            i += 1
+        ob = build_singbox_vless_outbound(l, l.get("uuid") or l.get("uid"), host, tag)
+        if ob:
+            outbounds.append(ob)
+            tags.append(tag)
+
+    selector = {
+        "type": "selector",
+        "tag": "proxy",
+        "outbounds": tags + ["direct"],
+        "default": tags[0] if tags else "direct",
+    }
+    return {
+        "log": {"level": "warn"},
+        "dns": {
+            "servers": [
+                {"type": "udp", "tag": "dns-remote", "server": "1.1.1.1"},
+                {"type": "udp", "tag": "dns-direct", "server": "1.1.1.1", "detour": "direct"},
+            ],
+            "rules": [{"outbound": "direct", "server": "dns-direct"}],
+            "final": "dns-remote",
+            "strategy": "prefer_ipv4",
+        },
+        "inbounds": [
+            {
+                "type": "tun",
+                "tag": "tun-in",
+                "address": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+                "mtu": 9000,
+                "auto_route": True,
+                "strict_route": True,
+                "stack": "system",
+                "sniff": True,
+            }
+        ],
+        "outbounds": [selector] + outbounds + [
+            {"type": "direct", "tag": "direct"},
+        ],
+        "route": {
+            "rules": [
+                {"action": "sniff"},
+                {"protocol": "dns", "action": "hijack-dns"},
+                {"ip_is_private": True, "outbound": "direct"},
+            ],
+            "auto_detect_interface": True,
+            "final": "proxy",
+        },
+    }
 
 def uptime() -> str:
     secs = int(time.time() - stats["start_time"])
@@ -1136,6 +1248,49 @@ async def sub_group_subscription(uuid_key: str, request: Request):
     return Response(
         content="\n".join(lines),
         media_type="text/plain",
+        headers={
+            "profile-title": quote(sub["name"]),
+            "profile-update-interval": "6",
+            "subscription-userinfo": build_userinfo_header(
+                total_used, sub.get("quota_bytes", 0), sub.get("expires_at")
+            ),
+        }
+    )
+
+@app.get("/sub-group/{uuid_key}/singbox")
+async def sub_group_subscription_singbox(uuid_key: str, request: Request):
+    """همون گروه بالا رو، به‌جای متن vless://، به‌صورت یه کانفیگ کامل و آماده‌ی اجرای sing-box
+    (با TUN برای وی‌پی‌ان سراسری) برمی‌گردونه؛ برای «افزودن خودکار» داخل اپ sing-box/SFA."""
+    async with SUBS_LOCK:
+        sub = next((s for s in SUBS.values() if s.get("uuid_key") == uuid_key), None)
+    if not sub:
+        raise HTTPException(status_code=404, detail="not found")
+
+    if sub.get("password_hash"):
+        pw = request.query_params.get("pw", "")
+        if hash_password(pw) != sub["password_hash"]:
+            raise HTTPException(status_code=403, detail="wrong password")
+
+    host = get_host(request)
+    link_ids = sub.get("link_ids", [])
+    async with LINKS_LOCK:
+        allowed_links = []
+        total_used = 0
+        for lid in link_ids:
+            link = LINKS.get(lid)
+            if link:
+                total_used += link.get("used_bytes", 0)
+                if is_link_allowed(link):
+                    allowed_links.append(link)
+
+    config = build_singbox_config(allowed_links, host, profile_name=sub["name"])
+    if len(config["outbounds"]) <= 2:  # فقط selector + direct یعنی هیچ کانفیگ vless-ws‌ای پیدا نشد
+        raise HTTPException(
+            status_code=400,
+            detail="این گروه هیچ کانفیگ VLESS/WS نداره — sing-box رسمی فعلاً از ترنسپورت XHTTP پشتیبانی نمی‌کنه، پس فقط کانفیگ‌های WS این گروه تبدیل می‌شن."
+        )
+    return JSONResponse(
+        content=config,
         headers={
             "profile-title": quote(sub["name"]),
             "profile-update-interval": "6",

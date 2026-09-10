@@ -3392,6 +3392,7 @@ function renderContent(d){{
   const subUrl = baseSubUrl + (savedPw ? '?pw=' + encodeURIComponent(savedPw) : '');
 
   window._panelSubUrl  = subUrl;
+  window._panelSubUrlSingbox = baseSubUrl + '/singbox' + (savedPw ? '?pw=' + encodeURIComponent(savedPw) : '');
   window._panelSubName = d.name;
   window._panelLinks   = d.links.map(l => ({{
     vless : l.vless_link,
@@ -3478,6 +3479,19 @@ function renderContent(d){{
         </div>
       </div>
 
+      <div class="v2ray-import-box" style="background:linear-gradient(120deg,rgba(139,92,246,.12) 0%,rgba(109,40,217,.06) 100%);border-color:rgba(139,92,246,.35)">
+        <div class="v2ray-import-head" style="color:#7C3AED"><i class="ti ti-cube"></i> افزودن خودکار به sing-box (پیشنهادی)</div>
+        <div class="v2ray-import-sub">اگه به‌جای v2rayNG از اپ رسمی sing-box (با نام SFA) استفاده می‌کنی، دکمه‌ی زیر یه پروفایل ریموتِ مخصوص همین اپ اضافه می‌کنه (فرمتش با ساب بالا فرق داره، مخصوص sing-box ساخته می‌شه).</div>
+        <a class="v2ray-import-btn" style="background:#7C3AED;box-shadow:0 8px 22px rgba(124,58,237,.32)" href="sing-box://import-remote-profile?url=${{encodeURIComponent(window._panelSubUrlSingbox)}}#${{encodeURIComponent(window._panelSubName)}}">
+          <i class="ti ti-download"></i> افزودن خودکار (sing-box)
+        </a>
+        <div class="v2ray-import-alt" style="margin-top:9px">
+          <button class="v2ray-import-alt-btn" style="border-color:rgba(139,92,246,.35);color:#7C3AED" onclick="navigator.clipboard.writeText(window._panelSubUrlSingbox).then(()=>toast('لینک کپی شد؛ داخل اپ sing-box به‌صورت دستی وارد کن','ok'))">
+            <i class="ti ti-clipboard-copy"></i> کپی برای ایمپورت دستی
+          </button>
+        </div>
+      </div>
+
       <div class="v2ray-import-box" style="background:linear-gradient(120deg,rgba(59,124,246,.12) 0%,rgba(41,82,200,.06) 100%);border-color:rgba(59,124,246,.35)">
         <div class="v2ray-import-head" style="color:var(--accent)"><i class="ti ti-apps"></i> اگه هنوز نرم‌افزار v2ray نصب نکردی</div>
         <div class="v2ray-import-sub">اول اپ رو از استور رسمی گوشیت نصب کن، بعد از دکمه‌های بالا برای افزودن ساب استفاده کن.</div>
@@ -3492,10 +3506,28 @@ function renderContent(d){{
         <div class="cl" style="margin-top:10px"><i class="ti ti-info-circle"></i><span>گوگل‌پلی/اپ‌استور ممکنه بسته به منطقه‌ی گوشیت در دسترس نباشه؛ در اون صورت از باکس پایین (نسخه‌ی مستقیم/یونیورسال) استفاده کن.</span></div>
       </div>
 
+      <div class="v2ray-import-box" style="background:linear-gradient(120deg,rgba(139,92,246,.12) 0%,rgba(109,40,217,.06) 100%);border-color:rgba(139,92,246,.35)">
+        <div class="v2ray-import-head" style="color:#7C3AED"><i class="ti ti-apps"></i> اگه هنوز نرم‌افزار sing-box نصب نکردی</div>
+        <div class="v2ray-import-sub">اپ رسمیش تو گوگل‌پلی با نام «sing-box» موجوده؛ بعد از نصب، از دکمه‌ی «افزودن خودکار (sing-box)» بالا استفاده کن.</div>
+        <div class="v2ray-import-alt" style="margin-top:0">
+          <a class="v2ray-import-alt-btn" style="border-color:rgba(139,92,246,.35);color:#7C3AED" target="_blank" href="https://play.google.com/store/apps/details?id=io.nekohasekai.sfa">
+            <i class="ti ti-brand-google-play"></i> Google Play (اندروید)
+          </a>
+        </div>
+      </div>
+
       <div class="v2ray-import-box" style="background:linear-gradient(120deg,rgba(245,158,11,.12) 0%,rgba(217,119,6,.05) 100%);border-color:rgba(245,158,11,.35)">
         <div class="v2ray-import-head" style="color:#D97706"><i class="ti ti-package"></i> دانلود مستقیم v2rayNG (بدون استور)</div>
         <a class="v2ray-import-btn" id="v2rayng-direct-dl" style="background:#D97706;box-shadow:0 8px 22px rgba(217,119,6,.32)" href="https://github.com/2dust/v2rayNG/releases/download/2.2.6/v2rayNG_2.2.6_arm64-v8a.apk">
           <i class="ti ti-brand-github"></i> دانلود مستقیم APK (اندروید)
+        </a>
+      </div>
+
+      <div class="v2ray-import-box" style="background:linear-gradient(120deg,rgba(245,158,11,.12) 0%,rgba(217,119,6,.05) 100%);border-color:rgba(245,158,11,.35)">
+        <div class="v2ray-import-head" style="color:#D97706"><i class="ti ti-package"></i> دانلود مستقیم sing-box (بدون استور)</div>
+        <div class="v2ray-import-sub" style="margin-bottom:9px">برخلاف v2rayNG، اپ رسمی sing-box نسخه‌ی آماده‌ی نصب رو گیت‌هاب منتشر نمی‌کنه؛ لینک زیر از F-Droid (منبع رسمیِ توصیه‌شده‌ی خودِ توسعه‌دهنده برای نصب مستقیم بدون استور) گرفته شده — همون فایل امضاشده‌ی خودِ سازنده‌ست.</div>
+        <a class="v2ray-import-btn" style="background:#D97706;box-shadow:0 8px 22px rgba(217,119,6,.32)" href="https://f-droid.org/repo/io.nekohasekai.sfa_728.apk">
+          <i class="ti ti-package"></i> دانلود مستقیم APK (اندروید)
         </a>
       </div>
     </div>
